@@ -3,7 +3,7 @@
 Semantic versioning; this file is the source of truth for the version string
 entered in the Connect IQ store at upload time.
 
-## 1.0.0 — unreleased (first store release)
+## 1.0.0 — 2026-07-22 (first store release)
 - One-tap tagging on a full-screen touch data field: **danger, closure** (with
   duration), **surface** (8 OSM-aligned types), **resupply** (water/food/repair),
   **scenery, other**.
