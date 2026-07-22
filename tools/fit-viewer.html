@@ -1,0 +1,859 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scout — FIT inspector</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #6b7280; --line: #e5e7eb;
+    --panel: #f9fafb; --accent: #1e7fc0; --ok: #2e8b57; --bad: #d1421f;
+    --mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101014; --fg: #e8e8ea; --muted: #9096a0; --line: #2a2a32;
+      --panel: #17171d; --accent: #4aa3e0; --ok: #4cae7a; --bad: #e8674a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1.25rem 4rem; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+  .sub { color: var(--muted); margin: 0 0 1.5rem; font-size: .9rem; }
+  #drop {
+    border: 2px dashed var(--line); border-radius: 10px; padding: 2.5rem 1rem;
+    text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  #drop:hover, #drop.over { border-color: var(--accent); background: var(--panel); }
+  #drop p { margin: .4rem 0; }
+  #drop .hint { color: var(--muted); font-size: .85rem; }
+  input[type=file] { display: none; }
+  section { margin-top: 2rem; }
+  h2 { font-size: 1rem; margin: 0 0 .6rem; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); }
+  .cards { display: flex; flex-wrap: wrap; gap: .6rem; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: .6rem .9rem; min-width: 7rem;
+  }
+  .card .k { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .card .v { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+  th, td { text-align: left; padding: .45rem .7rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { background: var(--panel); font-weight: 600; font-size: .75rem; text-transform: uppercase; color: var(--muted); }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .tag { display: inline-block; padding: .1rem .45rem; border-radius: 4px; font-size: .78rem; font-weight: 600; color: #fff; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  .err { border-left: 3px solid var(--bad); padding: .6rem .9rem; background: var(--panel); border-radius: 0 6px 6px 0; }
+  tr.cancelled td { opacity: .45; text-decoration: line-through; }
+  tr.cancelled td:last-child { text-decoration: none; }
+  .strike { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  a { color: var(--accent); }
+  code { font-family: var(--mono); font-size: .85em; }
+  .ridemap { display: block; max-width: 100%; height: auto; background: var(--panel); }
+  .map-bg { fill: var(--panel); }
+  .map-track { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; opacity: .55; }
+  .map-start { fill: var(--ok); stroke: var(--bg); stroke-width: 1.5; }
+  .map-end { fill: var(--bad); stroke: var(--bg); stroke-width: 1.5; }
+  .ridemap circle { cursor: default; }
+  .map-legend { display: flex; flex-wrap: wrap; gap: .4rem .9rem; margin-top: .6rem; font-size: .82rem; color: var(--muted); }
+  .map-legend .lg { display: inline-flex; align-items: center; gap: .35rem; }
+  .map-legend .sw { width: .7rem; height: .7rem; border-radius: 50%; display: inline-block; }
+  .note { color: var(--muted); font-size: .82rem; margin-top: .5rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Scout — FIT inspector</h1>
+  <p class="sub">Drop a <code>.fit</code> file to check the developer fields landed. Everything runs locally in this page; the file is never uploaded.</p>
+
+  <div id="drop">
+    <p><strong>Drop a .fit file here</strong></p>
+    <p class="hint">or click to browse</p>
+    <input type="file" id="file" accept=".fit,.FIT">
+  </div>
+
+  <div id="out"></div>
+</main>
+
+<script>
+// ===PARSER-START===  (node test harness extracts everything to PARSER-END)
+const FIT_EPOCH = 631065600; // 1989-12-31T00:00:00Z, in unix seconds
+
+// Indexed by base type number (low 5 bits of the base type byte).
+const BASE_TYPES = [
+  { name: 'enum',    size: 1, invalid: 0xFF },
+  { name: 'sint8',   size: 1, invalid: 0x7F },
+  { name: 'uint8',   size: 1, invalid: 0xFF },
+  { name: 'sint16',  size: 2, invalid: 0x7FFF },
+  { name: 'uint16',  size: 2, invalid: 0xFFFF },
+  { name: 'sint32',  size: 4, invalid: 0x7FFFFFFF },
+  { name: 'uint32',  size: 4, invalid: 0xFFFFFFFF },
+  { name: 'string',  size: 1, invalid: null },
+  { name: 'float32', size: 4, invalid: null },
+  { name: 'float64', size: 8, invalid: null },
+  { name: 'uint8z',  size: 1, invalid: 0x00 },
+  { name: 'uint16z', size: 2, invalid: 0x0000 },
+  { name: 'uint32z', size: 4, invalid: 0x00000000 },
+  { name: 'byte',    size: 1, invalid: 0xFF },
+  { name: 'sint64',  size: 8, invalid: null },
+  { name: 'uint64',  size: 8, invalid: null },
+  { name: 'uint64z', size: 8, invalid: null },
+];
+
+const MESG = { FILE_ID: 0, RECORD: 20, EVENT: 21, LAP: 19, SESSION: 18,
+               FIELD_DESCRIPTION: 206, DEVELOPER_DATA_ID: 207 };
+
+const CRC_TABLE = [0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401,
+                   0xA001, 0x6C00, 0x7800, 0xB401, 0x5000, 0x9C01, 0x8801, 0x4400];
+
+function crc16(bytes, start, end) {
+  let crc = 0;
+  for (let i = start; i < end; i++) {
+    const b = bytes[i];
+    let t = CRC_TABLE[crc & 0xF];
+    crc = ((crc >> 4) & 0x0FFF) ^ t ^ CRC_TABLE[b & 0xF];
+    t = CRC_TABLE[crc & 0xF];
+    crc = ((crc >> 4) & 0x0FFF) ^ t ^ CRC_TABLE[(b >> 4) & 0xF];
+  }
+  return crc;
+}
+
+function readField(dv, pos, baseNum, size, le) {
+  const bt = BASE_TYPES[baseNum];
+  if (!bt) return null;
+  if (bt.name === 'string') {
+    const arr = [];
+    for (let i = 0; i < size; i++) {
+      const c = dv.getUint8(pos + i);
+      if (c === 0) break;
+      arr.push(c);
+    }
+    return new TextDecoder().decode(new Uint8Array(arr));
+  }
+  const n = Math.max(1, Math.floor(size / bt.size));
+  const vals = [];
+  for (let i = 0; i < n; i++) {
+    const o = pos + i * bt.size;
+    let v;
+    switch (bt.name) {
+      case 'enum': case 'uint8': case 'uint8z': case 'byte': v = dv.getUint8(o); break;
+      case 'sint8':   v = dv.getInt8(o); break;
+      case 'uint16': case 'uint16z': v = dv.getUint16(o, le); break;
+      case 'sint16':  v = dv.getInt16(o, le); break;
+      case 'uint32': case 'uint32z': v = dv.getUint32(o, le); break;
+      case 'sint32':  v = dv.getInt32(o, le); break;
+      case 'float32': v = dv.getFloat32(o, le); break;
+      case 'float64': v = dv.getFloat64(o, le); break;
+      case 'sint64':  v = Number(dv.getBigInt64(o, le)); break;
+      case 'uint64': case 'uint64z': v = Number(dv.getBigUint64(o, le)); break;
+      default: v = null;
+    }
+    if (bt.invalid !== null && v === bt.invalid) v = null;
+    vals.push(v);
+  }
+  return n === 1 ? vals[0] : vals;
+}
+
+// Walks the whole file. Returns { header, crcOk, devFields, messages, counts }.
+// devFields maps "<devIdx>-<fieldNum>" -> { name, units, baseType, ... } as
+// declared by the field_description messages the app emitted.
+function parseFit(buffer) {
+  const dv = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+  if (buffer.byteLength < 14) throw new Error('File is too small to be a FIT file.');
+
+  const headerSize = dv.getUint8(0);
+  if (headerSize !== 12 && headerSize !== 14) {
+    throw new Error('Bad FIT header size: ' + headerSize + ' (expected 12 or 14).');
+  }
+  const sig = String.fromCharCode(...bytes.slice(8, 12));
+  if (sig !== '.FIT') throw new Error('Not a FIT file — missing ".FIT" signature.');
+
+  const header = {
+    headerSize,
+    protocolVersion: dv.getUint8(1),
+    profileVersion: dv.getUint16(2, true),
+    dataSize: dv.getUint32(4, true),
+  };
+
+  const dataEnd = headerSize + header.dataSize;
+  if (dataEnd + 2 > buffer.byteLength) {
+    throw new Error('Truncated file: header claims ' + header.dataSize +
+                    ' data bytes but only ' + (buffer.byteLength - headerSize - 2) + ' are present.');
+  }
+  const fileCrc = dv.getUint16(dataEnd, true);
+  const crcOk = crc16(bytes, 0, dataEnd) === fileCrc;
+
+  const localDefs = {};
+  const devFields = {};
+  const messages = [];
+  const counts = {};
+  let pos = headerSize;
+  let lastTimestamp = null;
+
+  while (pos < dataEnd) {
+    const rh = dv.getUint8(pos); pos++;
+    let localType, timeOffset = null;
+
+    if (rh & 0x80) {                       // compressed timestamp header
+      localType = (rh >> 5) & 0x03;
+      timeOffset = rh & 0x1F;
+    } else {
+      localType = rh & 0x0F;
+      if (rh & 0x40) {                     // definition message
+        const hasDev = (rh & 0x20) !== 0;
+        pos++;                             // reserved
+        const le = dv.getUint8(pos) === 0; pos++;
+        const globalNum = dv.getUint16(pos, le); pos += 2;
+        const nFields = dv.getUint8(pos); pos++;
+        const fields = [];
+        for (let i = 0; i < nFields; i++) {
+          fields.push({
+            num: dv.getUint8(pos),
+            size: dv.getUint8(pos + 1),
+            baseNum: dv.getUint8(pos + 2) & 0x1F,
+          });
+          pos += 3;
+        }
+        const dev = [];
+        if (hasDev) {
+          const nDev = dv.getUint8(pos); pos++;
+          for (let i = 0; i < nDev; i++) {
+            dev.push({
+              num: dv.getUint8(pos),
+              size: dv.getUint8(pos + 1),
+              devIdx: dv.getUint8(pos + 2),
+            });
+            pos += 3;
+          }
+        }
+        localDefs[localType] = { globalNum, le, fields, dev };
+        continue;
+      }
+    }
+
+    const def = localDefs[localType];
+    if (!def) throw new Error('Data message at byte ' + (pos - 1) +
+                              ' uses local type ' + localType + ' before it was defined.');
+
+    const msg = { globalNum: def.globalNum, fields: {}, devFields: {} };
+    for (const f of def.fields) {
+      msg.fields[f.num] = readField(dv, pos, f.baseNum, f.size, def.le);
+      pos += f.size;
+    }
+    for (const f of def.dev) {
+      const meta = devFields[f.devIdx + '-' + f.num];
+      const baseNum = meta ? (meta.baseType & 0x1F) : 2; // default uint8
+      msg.devFields[f.devIdx + '-' + f.num] = readField(dv, pos, baseNum, f.size, def.le);
+      pos += f.size;
+    }
+
+    if (timeOffset !== null && lastTimestamp !== null) {
+      // 5-bit rollover against the last full timestamp seen.
+      const rolled = (lastTimestamp & ~0x1F) + timeOffset;
+      msg.fields[253] = rolled < lastTimestamp ? rolled + 0x20 : rolled;
+    }
+    if (msg.fields[253] != null) lastTimestamp = msg.fields[253];
+
+    if (def.globalNum === MESG.FIELD_DESCRIPTION) {
+      const idx = msg.fields[0], num = msg.fields[1];
+      devFields[idx + '-' + num] = {
+        devIdx: idx,
+        fieldNum: num,
+        baseType: msg.fields[2],
+        name: msg.fields[3],
+        scale: msg.fields[6],
+        offset: msg.fields[7],
+        units: msg.fields[8],
+        nativeMesgNum: msg.fields[14],
+      };
+    }
+
+    counts[def.globalNum] = (counts[def.globalNum] || 0) + 1;
+    messages.push(msg);
+  }
+
+  return { header, crcOk, fileCrc, devFields, messages, counts };
+}
+
+const semiToDeg = (s) => s == null ? null : s * (180 / Math.pow(2, 31));
+const fitToDate = (t) => t == null ? null : new Date((t + FIT_EPOCH) * 1000);
+
+// --- poi-tagger specific decoding (must match PoiTaggerView.mc) ---
+const POI_TYPE = { 1: 'DANGER', 2: 'SCENERY', 3: 'WATER', 4: 'OTHER',
+                   5: 'CLOSURE', 6: 'SURFACE', 7: 'FOOD', 8: 'MECHANICAL' };
+const POI_COLOR = { 1: '#d1421f', 2: '#2e8b57', 3: '#1e7fc0', 4: '#b58900',
+                    5: '#8e44ad', 6: '#8e5a2b', 7: '#e67e22', 8: '#7f8c8d' };
+const POI_DETAIL = { 1: 'TODAY', 2: 'DAYS', 3: 'WEEKS', 4: 'MONTHS', 5: 'UNKNOWN' };
+// Surface type, in poi_detail when poi_type === 6 (SURFACE). Smooth -> rough,
+// aligned to OSM surface= values. 0/absent = unspecified surface point.
+const POI_SURFACE = { 1: 'Asphalt', 2: 'Concrete', 3: 'Paving (klinkers)',
+                      4: 'Sett', 5: 'Cobbles', 6: 'Gravel', 7: 'Dirt', 8: 'Sand',
+                      9: 'End' };
+const OSM_SURFACE = { 1: 'asphalt', 2: 'concrete', 3: 'paving_stones', 4: 'sett',
+                      5: 'cobblestone', 6: 'gravel', 7: 'ground', 8: 'sand' };
+// Per-surface segment colours, matching the device's picker tiles.
+const SURF_COLOR = { 1: '#555555', 2: '#8a8a8a', 3: '#c0392b', 4: '#9b7653',
+                     5: '#6e4b3a', 6: '#b58900', 7: '#8e5a2b', 8: '#d2b48c' };
+const SURF_TYPE = 6, SURF_END = 9;   // poi_type for SURFACE; poi_detail for "stretch ends"
+
+// Finds a developer field by name, whatever index the device assigned it.
+function findDevKey(devFields, name) {
+  for (const [key, meta] of Object.entries(devFields)) {
+    if (meta.name === name) return key;
+  }
+  return null;
+}
+
+// Undo rule — the device does none of this, it just logs what was tapped.
+// Two tags of the SAME type inside UNDO_WINDOW_S cancel each other out: the
+// rider tapped a tile, saw the wrong one flash, and tapped it again. A tag of
+// any other type never interacts, at any spacing, so burst-tagging a spot with
+// two different categories is untouched.
+//
+// Marks rather than removes, so the viewer can show what was retracted.
+// Assumes `tags` is in ascending time order (record order in the FIT).
+//
+// Two-tap tiles (closure, resupply's water/food/repair) commit only after their
+// picker and take longer to re-navigate for an undo, so they get double the
+// window. SURFACE is exempt entirely — a second surface tag is a segment
+// transition, not a retraction (see buildSurfaceSegments). MUST stay in step with
+// undoMsFor() on the device.
+const UNDO_WINDOW_S = 3;
+const SUBITEM_TYPES = new Set([3, 5, 7, 8]); // WATER, CLOSURE, FOOD, MECHANICAL
+const undoWindowFor = (type) => SUBITEM_TYPES.has(type) ? UNDO_WINDOW_S * 2 : UNDO_WINDOW_S;
+
+function applyUndoRule(tags, baseWindowS = UNDO_WINDOW_S) {
+  const out = tags.map(t => ({ ...t, cancelled: false }));
+  for (let i = 0; i < out.length; i++) {
+    if (out[i].cancelled || !out[i].time || out[i].type === SURF_TYPE) continue;
+    const windowS = SUBITEM_TYPES.has(out[i].type) ? baseWindowS * 2 : baseWindowS;
+    for (let j = i + 1; j < out.length; j++) {
+      if (!out[j].time) continue;
+      const dt = (out[j].time - out[i].time) / 1000;
+      if (dt >= windowS) break;              // ordered by time: nothing later can match
+      if (out[j].cancelled) continue;
+      if (out[j].type === out[i].type) {     // a pair — both go
+        out[i].cancelled = true;
+        out[j].cancelled = true;
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+// Joins the SURFACE transition tags into segments. Each surface tag is a
+// transition: a real type (1-8) opens a stretch (closing any open one at that
+// point), SURF_END (9) closes the open stretch and opens nothing (road back to
+// normal). SURF_NONE (0, a bare tap / timed-out picker) is an unspecified point,
+// not a segment boundary, so it's skipped here. Returns segments in time order;
+// an unterminated stretch is closed at `rideEnd` and flagged.
+function buildSurfaceSegments(tags, rideEnd) {
+  const surf = tags.filter(t => t.type === SURF_TYPE && !t.cancelled && t.time)
+                   .sort((a, b) => a.time - b.time);
+  const segments = [];
+  let open = null;
+  const close = (t, ended) => {
+    open.endTime = t ? t.time : null;
+    open.endLat = t ? t.lat : null;
+    open.endLon = t ? t.lon : null;
+    open.ended = ended;                      // true = explicit END, false = switch/ride-end
+    segments.push(open);
+    open = null;
+  };
+  for (const t of surf) {
+    if (t.detail >= 1 && t.detail <= 8) {    // a type — open (closing any current)
+      if (open) close(t, false);             // switch: previous ends where this starts
+      open = { type: t.detail, startTime: t.time, startLat: t.lat, startLon: t.lon };
+    } else if (t.detail === SURF_END) {      // explicit end
+      if (open) close(t, true);              // else stray END — ignore
+    }
+  }
+  if (open) { open.endTime = rideEnd; open.endLat = null; open.endLon = null;
+              open.ended = false; open.unterminated = true; segments.push(open); }
+  return segments;
+}
+
+// Counts vehicles from the per-second radar_count channel.
+//
+// The Varia gives no target ids, so "how many distinct cars" is always an
+// inference. The rule: every increase in simultaneous targets is that many new
+// vehicles arriving. Targets leaving (count falling) are ignored — that's the
+// same car finishing its pass, not a new one.
+//
+// Arrivals are then held for one second and only counted if the radar still
+// sees *something* on the next record. A real car finishing its pass hands the
+// radar over to the car behind it or to the rest of its group, so the count
+// falls to another target; a spurious one-second reading falls back to an empty
+// road. Corroborating on presence rather than on the count holding its level is
+// deliberate — requiring the level to repeat drops the last car of a queue
+// whenever the third arrives in the same second the first clears. This matches
+// the head unit's on-screen tally exactly; see the README.
+//
+// Two consequences worth knowing: a car present for a single second is never
+// counted (indistinguishable from noise), and an arrival in the final record of
+// a ride is dropped, as nothing follows it to corroborate.
+//
+// Still a floor, not an exact figure: it undercounts when one car leaves and
+// another arrives inside the same second. radar_count === null means no radar
+// was tracking, which is NOT the same as an empty road and must never be
+// counted as zero traffic.
+function countVehicles(parsed) {
+  const key = findDevKey(parsed.devFields, 'radar_count');
+  const nearKey = findDevKey(parsed.devFields, 'radar_near');
+  const speedKey = findDevKey(parsed.devFields, 'radar_speed');
+  if (!key) return null;
+
+  let total = 0, prev = 0, covered = 0, records = 0, maxConcurrent = 0;
+  const passes = [];      // one entry per confirmed arrival, in arrival order
+  let pending = [];       // arrivals from the previous record, awaiting proof
+  for (const m of parsed.messages) {
+    if (m.globalNum !== MESG.RECORD) continue;
+    records++;
+    const c = m.devFields[key];
+    // Radar not tracking: no evidence either way, so a held arrival is dropped
+    // rather than confirmed across a gap of unknown length.
+    if (c == null) { prev = 0; pending = []; continue; }
+    covered++;
+    if (c > maxConcurrent) maxConcurrent = c;
+
+    // A target is still there, so last second's arrivals were real. They keep
+    // their own timestamp and position — the moment of arrival is the useful
+    // one, not the moment it was confirmed.
+    if (pending.length && c > 0) {
+      total += pending.length;
+      for (const p of pending) passes.push(p);
+    }
+    pending = [];
+
+    if (c > prev) {
+      const sp = speedKey ? m.devFields[speedKey] : null;
+      const near = nearKey ? m.devFields[nearKey] : null;
+      // Radar reports CLOSING speed (car minus bike). Adding the rider's own
+      // ground speed at this record recovers the car's approximate ground speed
+      // — FIT record speed (field 6) is mm/s-scaled (raw / 1000 = m/s).
+      const riderRaw = m.fields[73] != null ? m.fields[73] : m.fields[6];  // enhanced_speed, else speed
+      const rider = riderRaw != null ? Math.round(riderRaw / 1000 * 3.6) : null;
+      const ground = (sp != null && rider != null) ? sp + rider : null;
+      for (let i = 0; i < c - prev; i++) {
+        pending.push({ time: fitToDate(m.fields[253]), speed: sp, range: near,
+                       riderSpeed: rider, ground: ground,
+                       lat: semiToDeg(m.fields[0]), lon: semiToDeg(m.fields[1]) });
+      }
+    }
+    prev = c;
+  }
+  return { total, covered, records, maxConcurrent, passes,
+           coverage: records ? covered / records : 0 };
+}
+
+// Pulls out every record carrying a non-zero value in `typeName`.
+function extractTags(parsed, typeName, detailName) {
+  const typeKey = findDevKey(parsed.devFields, typeName);
+  const detailKey = findDevKey(parsed.devFields, detailName);
+  const tags = [];
+  let totalRecords = 0;
+
+  for (const m of parsed.messages) {
+    if (m.globalNum !== MESG.RECORD) continue;
+    totalRecords++;
+    if (!typeKey) continue;
+    const t = m.devFields[typeKey];
+    if (t == null || t === 0) continue;
+    tags.push({
+      time: fitToDate(m.fields[253]),
+      lat: semiToDeg(m.fields[0]),
+      lon: semiToDeg(m.fields[1]),
+      type: t,
+      detail: detailKey ? m.devFields[detailKey] : null,
+    });
+  }
+  return { tags: applyUndoRule(tags), totalRecords, typeKey, detailKey };
+}
+// ===PARSER-END===
+
+// ---------------- UI ----------------
+const dropEl = document.getElementById('drop');
+const fileEl = document.getElementById('file');
+const outEl = document.getElementById('out');
+
+dropEl.addEventListener('click', () => fileEl.click());
+fileEl.addEventListener('change', (e) => { if (e.target.files[0]) load(e.target.files[0]); });
+['dragenter', 'dragover'].forEach(ev => dropEl.addEventListener(ev, (e) => {
+  e.preventDefault(); dropEl.classList.add('over');
+}));
+['dragleave', 'drop'].forEach(ev => dropEl.addEventListener(ev, () => dropEl.classList.remove('over')));
+dropEl.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if (f) load(f);
+});
+
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function load(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      render(parseFit(reader.result), file);
+    } catch (err) {
+      outEl.innerHTML = '<section><div class="err"><strong>Could not parse this file.</strong><br>' +
+                        esc(err.message) + '</div></section>';
+    }
+  };
+  reader.onerror = () => {
+    outEl.innerHTML = '<section><div class="err">Could not read the file from disk.</div></section>';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function render(p, file) {
+  const { tags, totalRecords, typeKey } = extractTags(p, 'poi_type', 'poi_detail');
+  const html = [];
+
+  // --- file header ---
+  html.push('<section><h2>File</h2><div class="cards">');
+  html.push(card('Name', esc(file.name)));
+  html.push(card('Size', (file.size / 1024).toFixed(1) + ' KB'));
+  html.push(card('Protocol', 'v' + p.header.protocolVersion));
+  html.push(card('Profile', 'v' + p.header.profileVersion));
+  html.push(card('CRC', p.crcOk ? '<span class="ok">valid</span>' : '<span class="bad">MISMATCH</span>'));
+  html.push(card('Records', totalRecords));
+  html.push('</div>');
+  if (!p.crcOk) html.push('<p class="note bad">CRC does not match — the file may be truncated or corrupt.</p>');
+  html.push('</section>');
+
+  // --- developer fields ---
+  const dfs = Object.values(p.devFields);
+  html.push('<section><h2>Developer fields declared</h2>');
+  if (!dfs.length) {
+    html.push('<div class="err">No developer fields in this file. Either the data field was not on an active ' +
+              'data screen, or the activity was recorded without it.</div>');
+  } else {
+    html.push('<div class="scroll"><table><thead><tr><th>Name</th><th>Units</th>' +
+              '<th>Dev index</th><th>Field #</th><th>Base type</th></tr></thead><tbody>');
+    for (const d of dfs) {
+      const bt = BASE_TYPES[d.baseType & 0x1F];
+      html.push('<tr><td><code>' + esc(d.name ?? '?') + '</code></td><td>' + esc(d.units ?? '') +
+                '</td><td class="num">' + d.devIdx + '</td><td class="num">' + d.fieldNum +
+                '</td><td>' + esc(bt ? bt.name : d.baseType) + '</td></tr>');
+    }
+    html.push('</tbody></table></div>');
+  }
+  html.push('</section>');
+
+  // --- radar / traffic ---
+  const radar = countVehicles(p);
+  if (radar) {
+    html.push('<section><h2>Traffic (radar)</h2>');
+    if (!radar.covered) {
+      html.push('<div class="err">The radar fields are declared but no record has data — ' +
+                'the radar never reached TRACKING on this ride. This is recorded as ' +
+                '<em>unknown</em>, not as an empty road.</div>');
+    } else {
+      const durS = (() => {
+        const ts = p.messages.filter(m => m.globalNum === MESG.RECORD)
+                             .map(m => m.fields[253]).filter(v => v != null);
+        return ts.length > 1 ? ts[ts.length - 1] - ts[0] : 0;
+      })();
+      const perHour = durS ? (radar.total / (durS / 3600)) : 0;
+      const speeds = radar.passes.map(v => v.speed).filter(v => v != null);
+      const medSpeed = speeds.length
+        ? [...speeds].sort((a, b) => a - b)[Math.floor(speeds.length / 2)] : null;
+      html.push('<div class="cards">');
+      html.push(card('Vehicles', radar.total));
+      html.push(card('Per hour', perHour.toFixed(1)));
+      html.push(card('Max at once', radar.maxConcurrent));
+      html.push(card('Radar coverage', (radar.coverage * 100).toFixed(0) + '%'));
+      if (medSpeed != null) html.push(card('Median closing', medSpeed + ' kph'));
+      html.push('</div>');
+      html.push('<p class="note">Vehicles counted by summing every increase in simultaneous ' +
+                'targets — a floor, not an exact figure: two cars arriving as one leaves in the ' +
+                'same second read as one. Rear-facing radar, so this counts vehicles that ' +
+                '<strong>overtook you</strong>, not oncoming or crossing traffic. Coverage is the ' +
+                'share of records where the radar was actually tracking; the rest are unknown, ' +
+                'not empty.</p>');
+
+      // Per-vehicle detail: lets a ride be cross-checked against what the strip
+      // showed on the bar, and is where the overtaking-speed signal actually lives.
+      if (radar.passes.length) {
+        const withSpeed = radar.passes.filter(v => v.speed != null);
+        html.push('<div class="scroll" style="margin-top:.8rem"><table><thead><tr><th>#</th>' +
+                  '<th>Time (UTC)</th><th>Closing</th><th>Car speed (est)</th>' +
+                  '<th>Range at detect</th><th>Where</th>' +
+                  '</tr></thead><tbody>');
+        radar.passes.forEach((v, i) => {
+          const map = (v.lat != null && v.lon != null)
+            ? '<a href="https://www.openstreetmap.org/?mlat=' + v.lat.toFixed(6) +
+              '&mlon=' + v.lon.toFixed(6) + '#map=17/' + v.lat.toFixed(6) + '/' + v.lon.toFixed(6) +
+              '" target="_blank" rel="noopener">map</a>'
+            : '—';
+          html.push('<tr><td class="num">' + (i + 1) + '</td>' +
+            '<td class="num">' + (v.time ? v.time.toISOString().replace('T', ' ').replace('.000Z', '') : '—') + '</td>' +
+            '<td class="num">' + (v.speed != null ? v.speed + ' kph' : '—') + '</td>' +
+            '<td class="num">' + (v.ground != null ? v.ground + ' kph' : '—') + '</td>' +
+            '<td class="num">' + (v.range != null ? v.range + ' m' : '—') + '</td>' +
+            '<td>' + map + '</td></tr>');
+        });
+        html.push('</tbody></table></div>');
+        html.push('<p class="note">All ' + radar.passes.length + ' detections listed — no truncation. ' +
+                  'Values are taken at the moment the vehicle <em>appeared</em> on radar (typically ' +
+                  '~140&nbsp;m back), so closing speed is the approach speed, not the speed at the ' +
+                  'moment it passed you. <strong>Closing</strong> is what the radar reports (car ' +
+                  'speed minus yours); <strong>Car speed (est)</strong> adds your ground speed at ' +
+                  'that instant to approximate the car&rsquo;s actual speed. The radar quantises ' +
+                  'closing speed to ~11&nbsp;kph buckets, so treat the estimate as &plusmn;~5&nbsp;kph. ' +
+                  (withSpeed.length < radar.passes.length
+                    ? '<strong>' + (radar.passes.length - withSpeed.length) + ' have no speed</strong> — ' +
+                      'they were already tracked when the radar connected, so no arrival was observed.'
+                    : '') + '</p>');
+      }
+    }
+    html.push('</section>');
+  }
+
+  // --- tags ---
+  if (!typeKey) {
+    html.push('<section><h2>POI tags</h2><div class="err">No <code>poi_type</code> field in this file, so ' +
+              'there is nothing for this tool to decode. The developer fields above are whatever the ' +
+              'recording app did write.</div></section>');
+    outEl.innerHTML = html.join('');
+    return;
+  }
+
+  const live = tags.filter(t => !t.cancelled);
+  const cancelled = tags.length - live.length;
+  const byType = {};
+  for (const t of live) byType[t.type] = (byType[t.type] || 0) + 1;
+
+  html.push('<section><h2>Tags found — ' + live.length +
+            (cancelled ? ' <span style="text-transform:none;font-weight:400">(' + cancelled +
+                         ' cancelled by double-tap)</span>' : '') + '</h2>');
+  if (!tags.length) {
+    html.push('<div class="err"><strong>The field is declared but nothing was tagged.</strong><br>' +
+              'poi_type is 0 on all ' + totalRecords + ' records. Either no tile was tapped, or every tap ' +
+              'landed while the timer was paused (the dot top-right must be red).</div>');
+  } else {
+    html.push('<div class="cards">');
+    for (const code of Object.keys(byType).sort((a, b) => byType[b] - byType[a])) {
+      html.push(card(POI_TYPE[code] ?? ('code ' + code), byType[code]));
+    }
+    html.push('</div>');
+
+    html.push(mapSection(p, tags));
+
+    html.push('<div class="scroll" style="margin-top:.8rem"><table><thead><tr><th>#</th><th>Time (UTC)</th>' +
+              '<th>Type</th><th>Detail</th><th>Lat</th><th>Lon</th><th>Map</th><th></th></tr></thead><tbody>');
+    tags.forEach((t, i) => {
+      const name = POI_TYPE[t.type] ?? ('UNKNOWN (' + t.type + ')');
+      const color = POI_COLOR[t.type] ?? '#777';
+      const detail = (() => {
+        if (t.type === 5) {   // CLOSURE -> duration
+          return POI_DETAIL[t.detail] ?? (t.detail ? 'code ' + t.detail : '—');
+        }
+        if (t.type === 6) {   // SURFACE -> surface type (+ OSM value), or END
+          if (!POI_SURFACE[t.detail]) return 'unspecified';
+          return esc(POI_SURFACE[t.detail]) +
+                 (OSM_SURFACE[t.detail] ? ' <code>' + OSM_SURFACE[t.detail] + '</code>' : '');
+        }
+        return t.detail ? '<span class="bad">unexpected ' + t.detail + '</span>' : '—';
+      })();
+      const map = (t.lat != null && t.lon != null)
+        ? '<a href="https://www.openstreetmap.org/?mlat=' + t.lat.toFixed(6) + '&mlon=' + t.lon.toFixed(6) +
+          '#map=17/' + t.lat.toFixed(6) + '/' + t.lon.toFixed(6) + '" target="_blank" rel="noopener">open</a>'
+        : '—';
+      html.push('<tr class="' + (t.cancelled ? 'cancelled' : '') + '"><td class="num">' + (i + 1) + '</td>' +
+        '<td class="num">' + (t.time ? t.time.toISOString().replace('T', ' ').replace('.000Z', '') : '—') + '</td>' +
+        '<td><span class="tag" style="background:' + color + '">' + esc(name) + '</span></td>' +
+        '<td>' + detail + '</td>' +
+        '<td class="num">' + (t.lat != null ? t.lat.toFixed(6) : '<span class="bad">no fix</span>') + '</td>' +
+        '<td class="num">' + (t.lon != null ? t.lon.toFixed(6) : '<span class="bad">no fix</span>') + '</td>' +
+        '<td>' + map + '</td>' +
+        '<td>' + (t.cancelled ? '<span class="strike">undone</span>' : '') + '</td></tr>');
+    });
+    html.push('</tbody></table></div>');
+    html.push('<p class="note">Every tagged record is listed — no truncation. Rows struck through were ' +
+              'cancelled by a second tap of the same tile within ' + UNDO_WINDOW_S + 's and are excluded ' +
+              'from the counts above; they stay visible so a real double-tap is never confused with a bug. ' +
+              '"no fix" means the record had no GPS lock, not a tagging bug.</p>');
+  }
+  html.push('</section>');
+
+  outEl.innerHTML = html.join('');
+}
+
+function card(k, v) {
+  return '<div class="card"><div class="k">' + k + '</div><div class="v">' + v + '</div></div>';
+}
+
+// Great-circle distance in metres between two lat/lon points.
+function haversine(aLat, aLon, bLat, bLon) {
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (bLat - aLat) * toR, dLon = (bLon - aLon) * toR;
+  const s = Math.sin(dLat / 2) ** 2 +
+            Math.cos(aLat * toR) * Math.cos(bLat * toR) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+const fmtLen = (m) => m == null ? '—' : m >= 1000 ? (m / 1000).toFixed(2) + ' km' : Math.round(m) + ' m';
+const fmtDur = (s) => s == null ? '—' :
+  (s >= 60 ? Math.floor(s / 60) + 'm ' : '') + Math.round(s % 60) + 's';
+
+// One self-contained SVG combining the whole ride: the GPS track as a faint line
+// with every tag plotted on it in one view, colour-coded by type. No basemap and
+// no network request — a plot of the route's shape, enough to see where tags
+// cluster along it. Each marker carries a hover title; the per-tag table still
+// links out to OpenStreetMap for real streets.
+function mapSection(p, tags) {
+  const track = [];   // [lat, lon, timeMs|null]
+  for (const m of p.messages) {
+    if (m.globalNum !== MESG.RECORD) continue;
+    const lat = semiToDeg(m.fields[0]), lon = semiToDeg(m.fields[1]);
+    if (lat != null && lon != null) {
+      const d = fitToDate(m.fields[253]);
+      track.push([lat, lon, d ? d.getTime() : null]);
+    }
+  }
+  const rideEnd = track.length ? new Date(track[track.length - 1][2]) : null;
+  const segments = buildSurfaceSegments(tags, rideEnd);
+  // Point markers: everything except surface transition tags (those are the
+  // segments). A SURF_NONE surface point (detail 0) stays a dot.
+  const pts = tags.filter(t => t.lat != null && t.lon != null &&
+                               !(t.type === SURF_TYPE && t.detail >= 1 && t.detail <= 9));
+  if (track.length < 2 && pts.length === 0 && segments.length === 0) {
+    return '<section><h2>Map</h2><div class="err">No GPS positions in this ride, so there is nothing ' +
+           'to plot. Indoor rides and files recorded without a fix carry no coordinates.</div></section>';
+  }
+
+  let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+  const bump = (la, lo) => {
+    if (la == null) return;
+    if (la < minLat) minLat = la; if (la > maxLat) maxLat = la;
+    if (lo < minLon) minLon = lo; if (lo > maxLon) maxLon = lo;
+  };
+  for (const [la, lo] of track) bump(la, lo);
+  for (const t of pts) bump(t.lat, t.lon);
+
+  const midLat = (minLat + maxLat) / 2;
+  const kx = Math.cos(midLat * Math.PI / 180) || 1;
+  const W = 760, PAD = 24;
+  const spanX = Math.max((maxLon - minLon) * kx, 1e-6);
+  const spanY = Math.max(maxLat - minLat, 1e-6);
+  const innerW = W - 2 * PAD;
+  const innerH = Math.max(Math.round(innerW * spanY / spanX), 120);
+  const H = innerH + 2 * PAD;
+  const X = (lon) => (PAD + (lon - minLon) * kx / spanX * innerW).toFixed(1);
+  const Y = (lat) => (PAD + (maxLat - lat) / spanY * innerH).toFixed(1);
+
+  // Track points (lat/lon) whose timestamp falls in [a, b] — the ridden path of a
+  // segment. Also returns the ridden length in metres.
+  const sliceTrack = (a, b) => {
+    const aMs = a ? a.getTime() : -Infinity, bMs = b ? b.getTime() : Infinity;
+    const path = track.filter(([, , t]) => t != null && t >= aMs && t <= bMs);
+    let len = 0;
+    for (let i = 1; i < path.length; i++)
+      len += haversine(path[i - 1][0], path[i - 1][1], path[i][0], path[i][1]);
+    return { path, len: path.length >= 2 ? len : null };
+  };
+
+  const s = [];
+  s.push('<section><h2>Map</h2>');
+  s.push('<div class="scroll"><svg class="ridemap" viewBox="0 0 ' + W + ' ' + H + '" ' +
+         'width="' + W + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Ride map">');
+  s.push('<rect class="map-bg" x="0" y="0" width="' + W + '" height="' + H + '"/>');
+  if (track.length >= 2) {
+    s.push('<polyline class="map-track" points="' +
+           track.map(([la, lo]) => X(lo) + ',' + Y(la)).join(' ') + '"/>');
+    s.push('<circle class="map-start" r="4" cx="' + X(track[0][1]) + '" cy="' + Y(track[0][0]) +
+           '"><title>Start</title></circle>');
+    s.push('<circle class="map-end" r="4" cx="' + X(track[track.length - 1][1]) + '" cy="' +
+           Y(track[track.length - 1][0]) + '"><title>End</title></circle>');
+  }
+  // Surface segments as thick coloured lines over the track (drawn under the point
+  // markers). Each carries its computed length for the tooltip.
+  const segColor = (seg) => SURF_COLOR[seg.type] ?? '#777';
+  segments.forEach((seg, i) => {
+    const { path, len } = sliceTrack(seg.startTime, seg.endTime);
+    seg._len = len;
+    let d = path.map(([la, lo]) => X(lo) + ',' + Y(la)).join(' ');
+    if (path.length < 2 && seg.startLat != null && seg.endLat != null)   // no track slice: straight line
+      d = X(seg.startLon) + ',' + Y(seg.startLat) + ' ' + X(seg.endLon) + ',' + Y(seg.endLat);
+    if (!d) return;
+    const nm = POI_SURFACE[seg.type] ?? ('type ' + seg.type);
+    s.push('<polyline points="' + d + '" fill="none" stroke="' + segColor(seg) +
+           '" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"' +
+           (seg.unterminated ? ' stroke-dasharray="6 4"' : '') +
+           '><title>' + esc(nm + ' — ' + fmtLen(len) + (seg.unterminated ? ' (open)' : '')) +
+           '</title></polyline>');
+  });
+  // Point markers on top. Cancelled tags are hollow.
+  for (const t of pts) {
+    const c = POI_COLOR[t.type] ?? '#777';
+    const nm = POI_TYPE[t.type] ?? ('code ' + t.type);
+    const when = t.time ? t.time.toISOString().replace('T', ' ').replace('.000Z', '') : '';
+    const title = esc(nm + (t.cancelled ? ' (undone)' : '') + (when ? ' · ' + when : ''));
+    s.push('<circle cx="' + X(t.lon) + '" cy="' + Y(t.lat) + '" r="5" ' +
+           'fill="' + (t.cancelled ? 'none' : c) + '" stroke="' + c + '" stroke-width="2"' +
+           (t.cancelled ? ' stroke-dasharray="2 2" opacity="0.6"' : '') +
+           '><title>' + title + '</title></circle>');
+  }
+  s.push('</svg></div>');
+
+  s.push('<div class="map-legend">');
+  if (track.length >= 2) {
+    s.push('<span class="lg"><span class="sw" style="background:var(--ok)"></span>Start</span>');
+    s.push('<span class="lg"><span class="sw" style="background:var(--bad)"></span>End</span>');
+  }
+  for (const ty of [...new Set(pts.map(t => t.type))].sort((a, b) => a - b))
+    s.push('<span class="lg"><span class="sw" style="background:' + (POI_COLOR[ty] ?? '#777') +
+           '"></span>' + esc(POI_TYPE[ty] ?? ('code ' + ty)) + '</span>');
+  for (const ty of [...new Set(segments.map(g => g.type))].sort((a, b) => a - b))
+    s.push('<span class="lg"><span class="sw" style="width:1.1rem;height:.28rem;border-radius:1px;background:' +
+           (SURF_COLOR[ty] ?? '#777') + '"></span>' + esc(POI_SURFACE[ty] ?? ('type ' + ty)) + '</span>');
+  s.push('</div>');
+
+  s.push('<p class="note">Route shape from the ride’s GPS records — no basemap, so this shows ' +
+         'where things fall along the track, not the streets. Point tags are dots; <strong>surface stretches ' +
+         'are coloured lines</strong> along the road they cover (dashed = still open at ride end). Hover for ' +
+         'detail; the tables below link out to OpenStreetMap.</p>');
+
+  // Surface segments table.
+  if (segments.length) {
+    s.push('<h2 style="margin-top:1.6rem">Surface stretches — ' + segments.length + '</h2>');
+    s.push('<div class="scroll"><table><thead><tr><th>#</th><th>Surface</th><th>OSM</th>' +
+           '<th>From (UTC)</th><th>Length</th><th>Duration</th><th>Ended by</th><th>Map</th></tr></thead><tbody>');
+    segments.forEach((seg, i) => {
+      const nm = POI_SURFACE[seg.type] ?? ('type ' + seg.type);
+      const dur = seg.startTime && seg.endTime ? (seg.endTime - seg.startTime) / 1000 : null;
+      const from = seg.startTime ? seg.startTime.toISOString().replace('T', ' ').replace('.000Z', '') : '—';
+      const ended = seg.unterminated ? '<span class="bad">open (ride ended)</span>'
+                  : seg.ended ? 'END' : 'switch';
+      const map = (seg.startLat != null)
+        ? '<a href="https://www.openstreetmap.org/?mlat=' + seg.startLat.toFixed(6) + '&mlon=' +
+          seg.startLon.toFixed(6) + '#map=16/' + seg.startLat.toFixed(6) + '/' + seg.startLon.toFixed(6) +
+          '" target="_blank" rel="noopener">open</a>' : '—';
+      s.push('<tr><td class="num">' + (i + 1) + '</td>' +
+        '<td><span class="tag" style="background:' + segColor(seg) + '">' + esc(nm) + '</span></td>' +
+        '<td>' + (OSM_SURFACE[seg.type] ? '<code>' + OSM_SURFACE[seg.type] + '</code>' : '—') + '</td>' +
+        '<td class="num">' + from + '</td>' +
+        '<td class="num">' + fmtLen(seg._len) + '</td>' +
+        '<td class="num">' + fmtDur(dur) + '</td>' +
+        '<td>' + ended + '</td><td>' + map + '</td></tr>');
+    });
+    s.push('</tbody></table></div>');
+    s.push('<p class="note">A surface tag opens a stretch; picking another surface switches it (the previous ' +
+           'ends there) and <strong>END</strong> closes it (road back to normal). Length is measured along the ' +
+           'ridden GPS track between the start and end tags.</p>');
+  }
+  s.push('</section>');
+  return s.join('');
+}
+</script>
+</body>
+</html>

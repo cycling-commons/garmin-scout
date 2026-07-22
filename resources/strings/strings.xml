@@ -1,0 +1,18 @@
+<resources>
+    <!-- Store/on-device app name — the product only. The publisher brand comes
+         from the Connect IQ developer display name ("by …"), never from here, so
+         a fork can rename the app without touching anything else. -->
+    <string id="AppName">Scout</string>
+    <!-- Shown as the developer-field label in Garmin Connect (only if published) -->
+    <string id="poiFieldLabel">POI Type</string>
+    <string id="poiFieldUnits">code</string>
+    <string id="detailFieldLabel">POI Detail</string>
+    <string id="detailFieldUnits">code</string>
+    <string id="radarCountLabel">Vehicles Behind</string>
+    <string id="radarCountUnits">count</string>
+    <string id="radarCountChart">Vehicles Behind</string>
+    <string id="radarNearLabel">Nearest Vehicle</string>
+    <string id="radarNearUnits">m</string>
+    <string id="radarSpeedLabel">Closing Speed</string>
+    <string id="radarSpeedUnits">kph</string>
+</resources>

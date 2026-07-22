@@ -1,0 +1,49 @@
+<resources>
+    <!-- The developer fields written into every FIT 'record' message.
+         ids MUST match TYPE_FIELD_ID / DETAIL_FIELD_ID in ScoutView.mc. -->
+    <fitContributions>
+        <fitField id="0"
+                  displayInChart="false"
+                  displayInActivitySummary="false"
+                  displayInActivityLaps="false"
+                  sortOrder="0"
+                  dataLabel="@Strings.poiFieldLabel"
+                  unitLabel="@Strings.poiFieldUnits"/>
+        <!-- Qualifier for the poi_type on the same record: closure duration when
+             poi_type==5, surface type when poi_type==6; 0 wherever it doesn't
+             apply. Decoded against poi_type, so the two code sets may overlap. -->
+        <fitField id="1"
+                  displayInChart="false"
+                  displayInActivitySummary="false"
+                  displayInActivityLaps="false"
+                  sortOrder="1"
+                  dataLabel="@Strings.detailFieldLabel"
+                  unitLabel="@Strings.detailFieldUnits"/>
+        <!-- Radar observations, one sample per record. All three are the uint8
+             invalid (255) whenever no radar is tracking, so "no Varia fitted"
+             stays distinguishable from "no cars on this road". -->
+        <fitField id="2"
+                  displayInChart="true"
+                  chartTitle="@Strings.radarCountChart"
+                  fillColor="#C0392B"
+                  displayInActivitySummary="false"
+                  displayInActivityLaps="false"
+                  sortOrder="2"
+                  dataLabel="@Strings.radarCountLabel"
+                  unitLabel="@Strings.radarCountUnits"/>
+        <fitField id="3"
+                  displayInChart="false"
+                  displayInActivitySummary="false"
+                  displayInActivityLaps="false"
+                  sortOrder="3"
+                  dataLabel="@Strings.radarNearLabel"
+                  unitLabel="@Strings.radarNearUnits"/>
+        <fitField id="4"
+                  displayInChart="false"
+                  displayInActivitySummary="false"
+                  displayInActivityLaps="false"
+                  sortOrder="4"
+                  dataLabel="@Strings.radarSpeedLabel"
+                  unitLabel="@Strings.radarSpeedUnits"/>
+    </fitContributions>
+</resources>

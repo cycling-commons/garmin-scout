@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+    <iq:application entry="ScoutApp"
+                    id="cf471e9d798e4a1fa50757108717b617"
+                    launcherIcon="@Drawables.LauncherIcon"
+                    name="@Strings.AppName"
+                    type="datafield"
+                    minApiLevel="3.1.0">
+        <iq:products>
+            <!-- Touch Edge units only. The tap hit-test is the entire app, and a
+                 button-only unit (130/530/540/550/520) delivers no onTap and
+                 gives silently dead tiles — with no runtime way to detect it and
+                 warn. Verify before adding: each device's simulator.json must
+                 have "isTouch": true. -->
+            <iq:product id="edge1030"/>
+            <iq:product id="edge1030bontrager"/>
+            <iq:product id="edge1030plus"/>
+            <iq:product id="edge1040"/>
+            <iq:product id="edge1050"/>
+            <iq:product id="edge830"/>
+            <iq:product id="edge840"/>
+            <iq:product id="edge850"/>
+            <iq:product id="edgeexplore"/>
+            <iq:product id="edgeexplore2"/>
+            <!-- Smallest supported screen (200x265). Grid and the 9-tile surface
+                 picker both fit — verified in the simulator; the "WHAT SURFACE?"
+                 header sits tight against the top row but nothing clips. A rider
+                 who finds it cramped simply won't install it. -->
+            <iq:product id="edge820"/>
+            <!-- Deliberately excluded:
+                 edge130 / edge130plus / edgemtb  isTouch=false (edgemtb looks
+                     modern but is button-only — check, don't assume)
+                 edge530 / 540 / 550 / 520plus    button-only
+                 edge_1000                        CIQ 2.4 only, below minApiLevel -->
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="FitContributor"/>
+            <!-- Varia radar via Toybox.AntPlus.BikeRadar. If this turns out to
+                 be the wrong id, BikeRadar's constructor throws and we fall
+                 back to no radar rather than failing to start. -->
+            <iq:uses-permission id="Ant"/>
+        </iq:permissions>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+    </iq:application>
+</iq:manifest>
