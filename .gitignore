@@ -15,7 +15,6 @@ Thumbs.db
 *.der
 developer_key
 
-# Store-listing copy and asset-generation prompts are working/marketing
-# documents, not source — keep local only.
-/store/store-listing.md
-/store/asset-prompts.md
+# Store listing copy, asset-generation prompts, and store images/design
+# sources are working/marketing material, not source — keep local only.
+/store/
