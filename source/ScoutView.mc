@@ -86,6 +86,14 @@ class ScoutView extends WatchUi.DataField {
     // collapse into the same value or the traffic dataset is worthless.
     hidden const RADAR_NA = 255;
 
+    // Screenshot/demo aid ONLY: the simulator cannot emulate a real
+    // Toybox.AntPlus.BikeRadar (long-standing Connect IQ limitation — no ANT+
+    // accessory profile support in-sim), so there's no other way to show the
+    // "N cars" strip live for a store screenshot. Flip to true locally, capture
+    // the shot, flip back to false before committing — MUST be false at release;
+    // double-check before running the release build (see docs/PUBLISHING.md).
+    hidden const DEMO_RADAR = false;
+
     hidden const FLASH_MS = 1500;       // confirmation flash duration
     hidden const PICK_MS  = 12000;      // sub-page gives up (no pick) after this
     hidden const CORRECT_MS = 3000;     // after a subitem pick, window to re-pick
@@ -299,6 +307,17 @@ class ScoutView extends WatchUi.DataField {
     // no target ids, so tracking is inference either way, and inference belongs
     // where it can be fixed without reflashing.
     hidden function writeRadar() as Void {
+        if (DEMO_RADAR) {
+            // Canned reading — enough to populate the on-screen strip for a
+            // screenshot. Deliberately does NOT touch the FIT dev fields below,
+            // so a demo build still records honest (invalid) radar data if
+            // someone forgets to flip DEMO_RADAR back and records a real ride.
+            _radarLive = true;
+            _carCount = 3;
+            _lastCarSpeed = 42;
+            return;
+        }
+
         var count = RADAR_NA;
         var near = RADAR_NA;
         var speed = RADAR_NA;

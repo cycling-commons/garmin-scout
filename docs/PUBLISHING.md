@@ -50,6 +50,21 @@ They are independent of the account, and live in very different places:
 - A fork published to the store must be **clearly distinct** from the official
   build — its own name, id, and listing.
 
+## Screenshots
+
+- **Format**: PNG, **square, max 500×500 px, max 150KB** — the store forces square
+  and will squash a non-square upload to fit, so pad/crop to square yourself rather
+  than let that happen automatically.
+- **Framing**: optional; skip it. The simulator has no built-in device-frame
+  feature (devs who want one composite manually over the overlay PNGs at
+  `%APPDATA%\Garmin\ConnectIQ\Devices`), and for a data field the tile UI is what
+  sells the app — a frame just eats into the 500×500 budget. Crop tight to the
+  screen content and letterbox to square rather than stretching.
+- **Capture**: run the app in the CIQ Simulator (VS Code: F5 → *Run App*, pick a
+  device), then **File → Save Screenshot**.
+- **Shot list**: see [store/store-listing.md](../store/store-listing.md); save the
+  files to `store/screenshots/`.
+
 ## Release steps
 
 1. Bump the version + changelog entry.
@@ -57,5 +72,5 @@ They are independent of the account, and live in very different places:
    `monkeyc -e -r -f monkey.jungle -o bin/Scout.iq -y <key>`
 3. Upload `bin/Scout.iq` at [apps.garmin.com](https://apps.garmin.com) from the
    right account; paste the listing copy from
-   [store/store-listing.md](../store/store-listing.md); add screenshots (shot-list
-   is in that file).
+   [store/store-listing.md](../store/store-listing.md); add the screenshots from
+   `store/screenshots/` (see above).
