@@ -1,0 +1,54 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where's the bug?
+      description: >
+        Scout splits cleanly into two halves (see CONTRIBUTING.md) — knowing
+        which one narrows this down fast.
+      options:
+        - Device (Connect IQ / Monkey C — source/*.mc)
+        - Parser (tools/fit-viewer.html, the browser viewer)
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device & SDK version
+      description: Only relevant if this is device-side.
+      placeholder: e.g. Edge 1030 Plus, SDK 9.2.0
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: >
+        A screenshot, log output, or a .fit file helps a lot — but strip or
+        synthesize it first, never attach a real ride (it contains a GPS
+        track). tools/make-test-fit.mjs can generate a synthetic one that
+        exercises every code path.
