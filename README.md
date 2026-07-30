@@ -30,9 +30,9 @@ record in the FIT file.
 - The dot top-right is **red while the timer is running** (taps are recorded),
   grey when paused/stopped (nothing is being written).
 
-Setup: add Scout as the **only** field on one of your Edge's data pages (it owns
-the whole screen for tapping). Build & sideload steps are in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+Setup: for the biggest tap target, give Scout a data page to itself — it uses
+whatever area it's given for tapping, so sharing a page shrinks the hit zone.
+Build & sideload steps are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Getting the tags off your ride
 Scout only *records* into your FIT. It has **no network access** — no account, no
