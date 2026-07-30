@@ -47,9 +47,10 @@ telemetry, no upload. What happens after the ride is entirely your choice:
 3. **Or contribute it** to a project that ingests Scout data.
 
 **Contributing to the Cycling Commons Atlas** — the project Scout was built for —
-is a separate, opt-in step: upload the file manually or let it auto-sync from
-Intervals.icu or Garmin Connect; CC draws your tags on a map for you to review,
-enrich and prune; then you submit them for moderator approval before they go live.
+is a separate, opt-in step: upload the file manually, or let it auto-sync from
+wherever you already record your rides (e.g. Intervals.icu or Garmin Connect);
+CC draws your tags on a map for you to review, enrich and prune; then you
+submit them for moderator approval before they go live.
 **Only the tagged points and surface stretches are read** — no route track, times,
 power or heart rate. A free account is required (no real name), contributions are
 anonymous unless you make your profile public, and the CC parser's source is
