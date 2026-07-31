@@ -14,8 +14,8 @@ jobs:
         with:
           node-version: '20'
       # The suite is self-contained: it builds a full binary FIT in-memory
-      # (tools/make-test-fit.mjs) and parses it with the exact parser shipped in
-      # fit-viewer.html — no Garmin SDK or sample file needed. Omitting the third
-      # arg skips only the optional SDK-sample smoke test.
+      # (Garmin/tools/make-test-fit.mjs) and parses it with the exact parser shipped
+      # in fit-viewer.html — no Garmin SDK or sample file needed. Omitting the
+      # third arg skips only the optional SDK-sample smoke test.
       - name: Run parser + E2E tests
-        run: node tools/test-fit-parser.mjs tools/fit-viewer.html
+        run: node Garmin/tools/test-fit-parser.mjs Garmin/tools/fit-viewer.html

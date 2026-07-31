@@ -1,12 +1,20 @@
-# Scout — FIT data format & parser reference
+# Scout — Data format & parser reference
 
-How Scout records tags into the activity FIT, and how to read them back. This is
+How Scout records tags into the activity file, and how to read them back. This is
 the reference for anyone ingesting Scout rides (the Cycling Commons Atlas, or your
-own tooling). The reference parser is [`tools/fit-viewer.html`](../tools/fit-viewer.html);
-port its logic, don't reinvent it.
+own tooling). Behavioural product rules (UI, timings, radar transport) are in
+**[SPEC.md](SPEC.md)**; this document is the **on-disk / parser contract**.
 
-Everything is stored as **Connect IQ developer fields on the `record` message** —
-no separate file, no separate coordinates (the record already carries lat/lon).
+The reference parser currently ships in
+[`Garmin/tools/fit-viewer.html`](../Garmin/tools/fit-viewer.html); port its logic,
+don't reinvent it.
+
+**Canonical encoding:** FIT developer fields on each `record` message — no
+separate file, no separate coordinates (the record already carries lat/lon).
+Platforms should write original FIT with these fields when feasible. Platform
+deltas (if any) live under that platform’s folder, with a short pointer here.
+
+Everything below is stored as those developer fields on the `record` message.
 
 ## The tags: `poi_type` / `poi_detail`
 
@@ -172,8 +180,10 @@ what the radar reported. The counting happens afterwards — on the screen while
 you ride, and again in the parser when the file is read. That means the rule can
 be changed later and applied to rides already recorded, and it can be fixed
 without reflashing the device. If you change it, change it in **both** places
-(`writeRadar()` in `source/ScoutView.mc` and `countVehicles()` in
-`tools/fit-viewer.html`) or the screen and the parser will disagree.
+(the platform’s live radar mirror — e.g. `writeRadar()` in
+`Garmin/source/ScoutView.mc` — and `countVehicles()` in
+[`Garmin/tools/fit-viewer.html`](../Garmin/tools/fit-viewer.html)) or the screen
+and the parser will disagree.
 
 **It only sees behind you.** The count is *vehicles that overtook you* — not
 oncoming, not crossing. For cyclist safety that's arguably the metric that
@@ -205,8 +215,8 @@ This is deliberate:
 - the FIT stays a faithful log of what the rider actually did.
 
 The cost: a consumer that doesn't implement the rule sees both tags instead of
-neither. `applyUndoRule()` in `tools/fit-viewer.html` is the reference
-implementation — port it wherever the FIT is ingested.
+neither. `applyUndoRule()` in [`Garmin/tools/fit-viewer.html`](../Garmin/tools/fit-viewer.html)
+is the reference implementation — port it wherever the FIT is ingested.
 
 It also means the **FIFO queue is load-bearing**. One tap per `compute()` is
 drained onto its own record; a single pending slot would collapse a fast
@@ -263,13 +273,13 @@ tag / radar not tracking. A handful of seconds from a real ride:
 Note how the three picker patterns look on disk: CLOSURE and SURFACE are one
 `poi_type` carrying a `poi_detail` qualifier, while the RESUPPLY leaf (WATER) is
 just its own `poi_type` with detail 0. This is the exact output of
-`tools/make-test-fit.mjs`, so `node tools/make-test-fit.mjs out.fit` writes the
-file these rows came from — drop it on the viewer to see them plotted.
+`Garmin/tools/make-test-fit.mjs`, so `node Garmin/tools/make-test-fit.mjs out.fit`
+writes the file these rows came from — drop it on the viewer to see them plotted.
 
 ## Checking a FIT file (the viewer + tests)
-Open [`tools/fit-viewer.html`](../tools/fit-viewer.html) in any browser (just
-double-click it) and drop a `.fit` file on it. No install, no server, and the
-file never leaves your machine — it's parsed in the page. It shows:
+Open [`Garmin/tools/fit-viewer.html`](../Garmin/tools/fit-viewer.html) in any
+browser (just double-click it) and drop a `.fit` file on it. No install, no
+server, and the file never leaves your machine — it's parsed in the page. It shows:
 
 - file header + **CRC check** (catches truncated/corrupt files),
 - every developer field the recording device actually declared,
@@ -279,33 +289,37 @@ file never leaves your machine — it's parsed in the page. It shows:
 - a row per tagged record: time, decoded type/detail names, lat/lon, map link.
 
 The two failure modes it's built to tell apart: *no developer fields at all*
-(the field wasn't on an active data screen) versus *fields declared but
-poi_type is 0 everywhere* (nothing tapped, or tapped while the timer was
-paused).
+(the field wasn't on an active data screen / writer never declared them) versus
+*fields declared but poi_type is 0 everywhere* (nothing tapped, or tapped while
+the timer was paused).
 
-`tools/test-fit-parser.mjs` exercises the parser (extracted from the marker block
-in the HTML, so it's the shipping code). It's **self-contained** — it builds a
-full binary FIT in memory covering every option and asserts the whole pipeline
-(parse → tags → surface segments → vehicle count → CRC/bad input), so it needs no
-Garmin SDK:
+`Garmin/tools/test-fit-parser.mjs` exercises the parser (extracted from the
+marker block in the HTML, so it's the shipping code). It's **self-contained** —
+it builds a full binary FIT in memory covering every option and asserts the whole
+pipeline (parse → tags → surface segments → vehicle count → CRC/bad input), so it
+needs no Garmin SDK:
 
-    node tools/test-fit-parser.mjs tools/fit-viewer.html
+    node Garmin/tools/test-fit-parser.mjs Garmin/tools/fit-viewer.html
 
 Pass a real FIT as an optional third argument to also smoke-test against it (the
 SDK sample, or your own ride). To get a real `.fit` covering every option to open
-in the viewer, generate one with `tools/make-test-fit.mjs`:
+in the viewer, generate one with `Garmin/tools/make-test-fit.mjs`:
 
-    node tools/make-test-fit.mjs out.fit    # then drop out.fit on the viewer
+    node Garmin/tools/make-test-fit.mjs out.fit    # then drop out.fit on the viewer
+
+## Platform deltas
+
+None yet. If a port cannot emit FIT developer fields byte-for-byte, document the
+mapping under that platform and link it from this section.
 
 ## FIT gotchas for integrators
-- **The tags travel inside the raw `.FIT`, published or sideloaded.** The device
-  writes the developer fields into the activity file regardless of store status,
-  so any path that hands you the *original* `.FIT` has them: a USB copy, Garmin
-  Connect's **Export Original**, or Intervals.icu's original-file download. Those
-  bytes are all an ingester needs. (Publishing only changes whether Garmin Connect
-  *draws* the fields as labelled charts in its own UI — cosmetic, not the data.) A
-  useful consequence: a full ingest pipeline can be tested against a **sideloaded**
-  build, before publishing.
+- **The tags travel inside the raw `.FIT`.** Any path that hands you the
+  *original* `.FIT` has them: a USB copy, Garmin Connect's **Export Original**,
+  Intervals.icu's original-file download, or an equivalent export from another
+  Scout port. Those bytes are all an ingester needs. (On Garmin Connect IQ,
+  publishing only changes whether Connect *draws* the fields as labelled charts
+  — cosmetic, not the data.) A useful consequence: a full ingest pipeline can be
+  tested against a **sideloaded** Garmin build, before publishing.
 - **Only the `.FIT` carries developer fields — re-encoded exports drop them.**
   Garmin Connect's **TCX/GPX** exports and the **Strava** copy (Strava's API
   doesn't expose CIQ developer fields) all lose the tags. Ingest the original

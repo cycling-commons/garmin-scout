@@ -1,85 +1,51 @@
-# Scout — a Connect IQ data field for touch Edge units
+# Scout
 
-_Tag hazards, closures, surfaces, resupply and scenery from the saddle (and count
-passing traffic), straight into your ride's FIT file. Built for the Cycling Commons
-Atlas ([cyclingcommons.org](https://cyclingcommons.org)) — but the app and its FIT
-format stand alone and are MIT-licensed, so any project can ingest the data._
+In-ride tagging for hazards, closures, surfaces, resupply, scenery — and optional
+rear-radar vehicle logging — written into your ride file. Built for the
+[Cycling Commons Atlas](https://cyclingcommons.org); MIT-licensed and usable
+standalone.
 
-Tap an on-screen zone during a ride to stamp a category onto the current GPS
-record in the FIT file.
+This repo is the **multi-platform Scout tree**. Shared behaviour and the on-disk
+contract live at the root; each platform folder holds that port’s code and any
+deltas.
 
-## Using it
-- Swipe to the POI page, tap a tile → it flashes **and buzzes/beeps** to confirm
-  (whichever your device supports and you haven't muted), and the code is written
-  to the next record. The tap feedback means you don't have to look down to know
-  it landed.
-- Each tile shows its own running tally for the ride ("DANGER 3"), net of
-  retractions; an untouched tile shows no number. RESUPPLY sums its leaves.
-- Tapped the wrong tile? Tap the same one again within the cancel window (3 s, or
-  6 s for the two-tap tiles) and the tag is retracted — the tile stays lit for that
-  whole window and its count ticks back down.
-- CLOSURE / SURFACE / RESUPPLY open a follow-up page instead. Picked the wrong
-  subitem? Just tap the right one — for **3 s** after a pick the page stays open
-  with your choice lit, and a new tap replaces it. When the 3 s pass it commits
-  with a beep and returns to the grid. BACK aborts with no tag. If you ride on
-  without picking at all, after 12 s a closure (duration UNKNOWN) and a surface
-  point (type unspecified) are still recorded; a resupply is dropped.
-- SURFACE marks a **stretch**: pick a type to start it, pick another to switch, or
-  pick **END** to close it (road back to normal). See
-  [Surface stretches](docs/DATA-FORMAT.md#surface-stretches).
-- The dot top-right is **red while the timer is running** (taps are recorded),
-  grey when paused/stopped (nothing is being written).
+## Shared docs (normative)
 
-Setup: for the biggest tap target, give Scout a data page to itself — it uses
-whatever area it's given for tapping, so sharing a page shrinks the hit zone.
-Build & sideload steps are in [CONTRIBUTING.md](CONTRIBUTING.md).
+| Doc | Role |
+| --- | --- |
+| **[docs/SPEC.md](docs/SPEC.md)** | Product behaviour: UI, timings, undo, surfaces, radar transport policy |
+| **[docs/DATA-FORMAT.md](docs/DATA-FORMAT.md)** | On-disk channels, codes, parser rules (undo / surfaces / vehicles) |
 
-## Getting the tags off your ride
-Scout only *records* into your FIT. It has **no network access** — no account, no
-telemetry, no upload. What happens after the ride is entirely your choice:
+Platform ports implement these. Do not invent parallel semantics.
 
-1. **Finish the ride.** Your tags and surface stretches are in the activity's FIT
-   file, alongside your normal ride data.
-2. **Read it yourself** — drop the file on
-   [`tools/fit-viewer.html`](tools/fit-viewer.html) to see every tagged point and
-   surface stretch drawn on the track, or hand it to any tool that reads FIT
-   developer fields ([docs/DATA-FORMAT.md](docs/DATA-FORMAT.md) is the spec).
-3. **Or contribute it** to a project that ingests Scout data.
+**Doc rule:** general specs stay here. If a platform must diverge, document the
+delta under that platform’s folder and add a **short pointer** in the relevant
+root doc (SPEC or DATA-FORMAT).
 
-**Contributing to the Cycling Commons Atlas** — the project Scout was built for —
-is a separate, opt-in step: upload the file manually, or let it auto-sync from
-wherever you already record your rides (e.g. Intervals.icu or Garmin Connect);
-CC draws your tags on a map for you to review, enrich and prune; then you
-submit them for moderator approval before they go live.
-**Only the tagged points and surface stretches are read** — no route track, times,
-power or heart rate. A free account is required (no real name), contributions are
-anonymous unless you make your profile public, and the CC parser's source is
-published, so what is read — and what isn't — can be verified rather than trusted.
+## Platforms
 
-Only the original `.FIT` carries the tags — a TCX/GPX export or the Strava copy
-drops them. See [FIT gotchas for integrators](docs/DATA-FORMAT.md#fit-gotchas-for-integrators).
+| Folder | Status |
+| --- | --- |
+| [Garmin/](Garmin/) | Connect IQ data field (reference implementation, v1.0 shipped) |
+| [Android/](Android/) | Phone app — not started |
+| [Hammerhead-Karoo/](Hammerhead-Karoo/) | Karoo port — not started |
+| [iPhone/](iPhone/) | iOS port — not started |
 
-## Verify the parser
-The reference parser is self-contained and needs no Garmin SDK:
+Radar pairing policy (all ports): **native ANT+ when available, otherwise
+Bluetooth LE**. See [SPEC §8](docs/SPEC.md#8-radar).
 
-    node tools/test-fit-parser.mjs tools/fit-viewer.html
+## Reference tools
 
-It builds a full binary FIT in memory covering every option and asserts the whole
-pipeline. To eyeball a real ride, open [`tools/fit-viewer.html`](tools/fit-viewer.html)
-in a browser and drop a `.fit` on it.
+The FIT viewer and parser tests currently live with the Garmin tree (first
+implementation):
 
-## Docs
-- **[docs/DATA-FORMAT.md](docs/DATA-FORMAT.md)** — the FIT developer fields, the
-  `poi_type`/`poi_detail`/surface/radar codes, the undo and vehicle-counting rules,
-  and how to read a ride back. The reference for ingesting Scout data.
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** — build, test, and Connect IQ device
-  notes; the "keep the device dumb" principle.
-- **[docs/PUBLISHING.md](docs/PUBLISHING.md)** — publishing to the Connect IQ
-  store (account, app `id`, signing key, versioning).
-- **[CHANGELOG.md](CHANGELOG.md)** · **[ROADMAP.md](ROADMAP.md)**
+- [`Garmin/tools/fit-viewer.html`](Garmin/tools/fit-viewer.html)
+- [`Garmin/tools/test-fit-parser.mjs`](Garmin/tools/test-fit-parser.mjs)
+
+```sh
+node Garmin/tools/test-fit-parser.mjs Garmin/tools/fit-viewer.html
+```
 
 ## License
-[MIT](LICENSE) © BikeCoders, current steward of the Cycling Commons project.
-Permissive on purpose: the FIT format and the reference parser (`applyUndoRule` /
-`buildSurfaceSegments` in [`tools/fit-viewer.html`](tools/fit-viewer.html)) are
-meant to be ported freely into whatever ingests these rides.
+
+MIT © BikeCoders (see each platform folder for its copy where applicable).

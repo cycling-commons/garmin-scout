@@ -3,7 +3,7 @@
 Post-v1.0 ideas, specced enough to pick up later. Nothing here is built yet.
 
 > **Shipped in v1.0** — surface stretches (begin/END segments). See
-> [Surface stretches](docs/DATA-FORMAT.md#surface-stretches).
+> [Surface stretches](../docs/DATA-FORMAT.md#surface-stretches).
 
 ## Show the open surface on the device
 

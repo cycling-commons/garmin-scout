@@ -1,8 +1,9 @@
-# Contributing to Scout
+# Contributing to Scout (Garmin)
 
-Thanks for helping out. Scout is a Garmin Connect IQ data field (the on-device
-tagger) plus a reference FIT parser (the browser viewer and its Node test suite).
-Contributions of any size are welcome.
+Thanks for helping out. This folder is the Garmin Connect IQ data field plus the
+reference FIT parser (browser viewer and Node test suite). Shared product and
+data contracts live at the repo root:
+[SPEC](../docs/SPEC.md) · [DATA-FORMAT](../docs/DATA-FORMAT.md).
 
 ## Ground rules
 
@@ -16,6 +17,7 @@ Contributions of any size are welcome.
   `tools/fit-viewer.html`. Change both, and add a test.
 - **The FIT is a contract.** `poi_type` / `poi_detail` / `SURF_*` / `DUR_*` codes
   are append-only — old rides must keep parsing. Add new codes; don't renumber.
+  Spec changes belong in the root docs, not only here.
 
 ## Parser changes (no Garmin SDK required)
 
