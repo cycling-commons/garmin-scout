@@ -23,6 +23,11 @@ Android/.idea/
 Android/*.iml
 Android/.kotlin/
 
+# Affinity / design scratch — keep exported logos in Brand/, not sources
+Brand/**/*.af
+Brand/**/*.zip
+Brand/**/replicate-prediction-*.png
+
 # Garmin Connect IQ build output and store working material
 Garmin/bin/
 Garmin/store/
