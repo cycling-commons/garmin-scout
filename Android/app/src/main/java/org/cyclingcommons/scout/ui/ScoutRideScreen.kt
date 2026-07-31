@@ -131,6 +131,7 @@ fun ScoutRideScreen(
             live = scout.radarLive,
             bonded = model.bondedRadarAddress != null,
             recording = scout.timer == TimerState.RUNNING,
+            seeking = model.radarSeeking,
             carCount = scout.carCount,
             speedKph = scout.lastCarSpeedKph,
             imperial = scout.imperial,
@@ -307,6 +308,7 @@ private fun RadarStrip(
     live: Boolean,
     bonded: Boolean,
     recording: Boolean,
+    seeking: Boolean,
     carCount: Int,
     speedKph: Int,
     imperial: Boolean,
@@ -325,7 +327,7 @@ private fun RadarStrip(
                 }
             }
             bonded && !recording -> "radar ready · Start to connect"
-            bonded && recording -> "connecting radar…"
+            bonded && recording && seeking -> "connecting radar…"
             else -> "no radar"
         }
     Box(

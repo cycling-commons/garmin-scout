@@ -63,6 +63,18 @@ class BleRadarSession(context: Context) {
         val g = gatt ?: return@Runnable
         finishClose(g)
     }
+    private val connectTimeout = Runnable {
+        if (stateRef.get() != RadarLinkState.CONNECTING) return@Runnable
+        // Device absent / unreachable — release the attempt so the ride can give up.
+        val g = gatt
+        if (g != null) {
+            beginDisconnect(g, disableMagene = false)
+        } else {
+            pendingConnectAddress = null
+            connectingAddress = null
+            setState(RadarLinkState.DISCONNECTED)
+        }
+    }
 
     var onStateChanged: ((RadarLinkState) -> Unit)? = null
     var onDeviceFound: ((RadarDeviceRow) -> Unit)? = null
@@ -243,6 +255,7 @@ class BleRadarSession(context: Context) {
     @SuppressLint("MissingPermission")
     private fun finishClose(g: BluetoothGatt) {
         mainHandler.removeCallbacks(closeFallback)
+        mainHandler.removeCallbacks(connectTimeout)
         try {
             g.close()
         } catch (_: Exception) {
@@ -307,9 +320,14 @@ class BleRadarSession(context: Context) {
             @Suppress("DEPRECATION")
             device.connectGatt(app, false, gattCallback)
         }
+        mainHandler.removeCallbacks(connectTimeout)
+        mainHandler.postDelayed(connectTimeout, CONNECT_TIMEOUT_MS)
     }
 
     private fun setState(s: RadarLinkState) {
+        if (s == RadarLinkState.TRACKING) {
+            mainHandler.removeCallbacks(connectTimeout)
+        }
         stateRef.set(s)
         onStateChanged?.invoke(s)
     }
@@ -636,6 +654,8 @@ class BleRadarSession(context: Context) {
     companion object {
         /** Magene often rejects a new GATT until the previous link fully drops. */
         private const val RECONNECT_SETTLE_MS = 450L
+        /** Abort a single connectGatt attempt if the peripheral never answers. */
+        private const val CONNECT_TIMEOUT_MS = 20_000L
 
         fun nameLooksLikeRadar(name: String?): Boolean {
             val n = name?.lowercase() ?: return false

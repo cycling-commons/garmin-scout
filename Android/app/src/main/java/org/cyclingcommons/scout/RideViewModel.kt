@@ -56,6 +56,8 @@ data class RideUiModel(
     val imperial: Boolean = false,
     val keepScreenOn: Boolean = false,
     val rides: List<RideFile> = emptyList(),
+    /** True while Start/Resume is still trying to reach a saved radar. */
+    val radarSeeking: Boolean = false,
 )
 
 class RideViewModel(app: Application) : AndroidViewModel(app) {
@@ -74,6 +76,10 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
 
     private var lastSampleAt = 0L
     private var lastRadarRetryAt = 0L
+    /** Wall-clock deadline for first-connect seek; 0 = not seeking / gave up. */
+    private var radarSeekUntilMs = 0L
+    /** Once true this ride, keep retrying drops for the rest of the recording. */
+    private var radarHadTracking = false
 
     init {
         radar.onBleDeviceFound = { row ->
@@ -128,9 +134,13 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         radar.onStateChanged = { st ->
+            if (st == RadarLinkState.TRACKING) {
+                radarHadTracking = true
+            }
             _ui.update {
                 it.copy(
                     radarState = st,
+                    radarSeeking = isRadarSeeking(System.currentTimeMillis()),
                     scout = mergeRadar(it.scout),
                 )
             }
@@ -145,21 +155,68 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
                 if (controller.timer == TimerState.RUNNING && now - lastSampleAt >= 1000L) {
                     lastSampleAt = now
                     writeSample(now)
-                    // Magene/BLE can drop — retry reconnect while recording.
-                    val st = radar.state()
-                    if ((st == RadarLinkState.DISCONNECTED || st == RadarLinkState.ABSENT) &&
-                        radarPrefs.address != null &&
-                        now - lastRadarRetryAt >= 5_000L
-                    ) {
-                        lastRadarRetryAt = now
-                        radar.connectForRide()
-                    }
+                    maybeRetryRadar(now)
                 }
                 publish(now)
                 delay(250)
             }
         }
         refreshPermissions()
+    }
+
+    private fun beginRadarSeek(nowMs: Long = System.currentTimeMillis()) {
+        radarHadTracking = false
+        radarSeekUntilMs = nowMs + RADAR_SEEK_MS
+        lastRadarRetryAt = 0L
+    }
+
+    private fun clearRadarSeek() {
+        radarSeekUntilMs = 0L
+        radarHadTracking = false
+    }
+
+    private fun isRadarSeeking(nowMs: Long): Boolean {
+        if (controller.timer != TimerState.RUNNING) return false
+        if (radarPrefs.address == null && radarPrefs.antDeviceNumber == null) return false
+        if (radar.state() == RadarLinkState.TRACKING) return false
+        if (radarHadTracking) return true
+        return radarSeekUntilMs > 0L && nowMs < radarSeekUntilMs
+    }
+
+    private fun maybeRetryRadar(nowMs: Long) {
+        val hasSaved =
+            radarPrefs.address != null || radarPrefs.antDeviceNumber != null
+        if (!hasSaved) return
+        val st = radar.state()
+        if (st == RadarLinkState.TRACKING) {
+            radarHadTracking = true
+            return
+        }
+        if (st == RadarLinkState.CONNECTING || st == RadarLinkState.SCANNING) {
+            // Single in-flight attempt; BleRadarSession times out CONNECTING.
+            if (!radarHadTracking &&
+                radarSeekUntilMs > 0L &&
+                nowMs >= radarSeekUntilMs
+            ) {
+                radar.disconnect()
+                radarSeekUntilMs = 0L
+            }
+            return
+        }
+        val mayRetry = radarHadTracking ||
+            (radarSeekUntilMs > 0L && nowMs < radarSeekUntilMs)
+        if (!mayRetry) {
+            if (radarSeekUntilMs > 0L && nowMs >= radarSeekUntilMs) {
+                radar.disconnect()
+                radarSeekUntilMs = 0L
+            }
+            return
+        }
+        if (nowMs - lastRadarRetryAt < RADAR_RETRY_GAP_MS) return
+        if (st == RadarLinkState.DISCONNECTED || st == RadarLinkState.ABSENT) {
+            lastRadarRetryAt = nowMs
+            radar.connectForRide()
+        }
     }
 
     private fun publishDeviceList() {
@@ -300,6 +357,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         if (location.hasPermission()) {
             location.start()
         }
+        beginRadarSeek()
         radar.connectForRide()
         RideForegroundService.sync(app, TimerState.RUNNING)
         publish()
@@ -309,6 +367,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         controller.pause()
         location.stop()
         radar.disconnect()
+        clearRadarSeek()
         fitSession?.flush()
         RideForegroundService.sync(getApplication(), TimerState.PAUSED)
         publish()
@@ -319,6 +378,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         if (location.hasPermission()) {
             location.start()
         }
+        beginRadarSeek()
         radar.connectForRide()
         RideForegroundService.sync(getApplication(), TimerState.RUNNING)
         publish()
@@ -329,6 +389,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         vehicles.resetRide()
         location.stop()
         radar.disconnect()
+        clearRadarSeek()
         val finished = fitSession?.takeIf { it.recordCount > 0 }?.finish()
         fitSession = null
         RideForegroundService.sync(getApplication(), TimerState.IDLE)
@@ -341,6 +402,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
                 lastFitPath = finished?.absolutePath,
                 lastFixLabel = "no fix",
                 radarState = radar.state(),
+                radarSeeking = false,
                 bondedRadarName = radarPrefs.name,
                 bondedRadarAddress = radarPrefs.address
                     ?: radarPrefs.antDeviceNumber?.let { n -> "ANT+$n" },
@@ -462,6 +524,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
                 },
                 imperial = appPrefs.imperial,
                 keepScreenOn = appPrefs.keepScreenOn,
+                radarSeeking = isRadarSeeking(nowMs),
             )
         }
     }
@@ -534,5 +597,11 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         location.stop()
         radar.disconnect()
         super.onCleared()
+    }
+
+    companion object {
+        /** Stop trying to find a missing radar after Start/Resume. */
+        private const val RADAR_SEEK_MS = 45_000L
+        private const val RADAR_RETRY_GAP_MS = 5_000L
     }
 }
