@@ -96,8 +96,8 @@ In Studio: **Settings → Build Tools → Gradle → Gradle JDK → Embedded JDK
 ## 2. Clone the repo
 
 ```sh
-git clone https://github.com/cycling-commons/garmin-scout.git
-cd garmin-scout
+git clone https://github.com/cycling-commons/scout.git
+cd scout
 ```
 
 Android project: `Android/`. Shared specs: `docs/`.

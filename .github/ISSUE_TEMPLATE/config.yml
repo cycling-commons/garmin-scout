@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Contributing guide
-    url: https://github.com/cycling-commons/garmin-scout/blob/main/CONTRIBUTING.md
+    url: https://github.com/cycling-commons/scout/blob/main/CONTRIBUTING.md
     about: Read this before opening a PR — build/test steps and project conventions.
