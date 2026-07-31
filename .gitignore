@@ -2,6 +2,10 @@
 Thumbs.db
 .DS_Store
 *.stackdump
+*~lock~
+
+# JVM heap dumps (OOM)
+*.hprof
 
 # Activity files — may contain real GPS tracks
 *.fit
@@ -10,6 +14,14 @@ Thumbs.db
 # Developer keys must live outside the repo
 *.der
 developer_key
+
+# Android / Gradle
+Android/.gradle/
+Android/**/build/
+Android/local.properties
+Android/.idea/
+Android/*.iml
+Android/.kotlin/
 
 # Garmin Connect IQ build output and store working material
 Garmin/bin/

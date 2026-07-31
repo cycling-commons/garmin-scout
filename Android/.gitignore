@@ -1,0 +1,20 @@
+﻿# Android / Gradle
+/.gradle/
+**/build/
+/local.properties
+*.iml
+.idea/
+.cxx/
+.kotlin/
+captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# JVM heap dumps (OOM / -XX:+HeapDumpOnOutOfMemoryError)
+*.hprof
+
+# OS
+.DS_Store
+Thumbs.db

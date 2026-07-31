@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scale the square brand mark into the adaptive-icon safe zone so
+     "Scout" isn't clipped by circular / squircle launcher masks. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/scout_logo_white"
+    android:inset="22%" />

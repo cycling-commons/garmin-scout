@@ -14,6 +14,10 @@ separate file, no separate coordinates (the record already carries lat/lon).
 Platforms should write original FIT with these fields when feasible. Platform
 deltas (if any) live under that platform’s folder, with a short pointer here.
 
+**Android:** no format delta — [`Android/fit`](../Android/fit/) writes the same
+five Scout channels plus timestamp / lat / lon / speed (SPEC §4.2); see
+[`Android/docs/TECHNICAL.md`](../Android/docs/TECHNICAL.md) §9.
+
 Everything below is stored as those developer fields on the `record` message.
 
 ## The tags: `poi_type` / `poi_detail`
@@ -217,6 +221,26 @@ This is deliberate:
 The cost: a consumer that doesn't implement the rule sees both tags instead of
 neither. `applyUndoRule()` in [`Garmin/tools/fit-viewer.html`](../Garmin/tools/fit-viewer.html)
 is the reference implementation — port it wherever the FIT is ingested.
+
+### Live UI tallies (all ports)
+
+The on-bike / in-app counters are a **display mirror** of the undo rule above —
+they do not change the FIT. Every Scout port must show them the same way
+([SPEC §6.7](SPEC.md#67-per-tile-tallies)):
+
+- **Main grid:** per-`poi_type` counts; RESUPPLY folder = sum of WATER+FOOD+MECHANICAL;
+  CLOSURE = sum of all duration commits; SURFACE = stretch starts only.
+- **Duration submenu:** per-`poi_detail` counts (`TODAY`…`UNKNOWN`). Duration codes
+  numerically overlap `poi_type` — keep a **separate** detail bucket array.
+- **Resupply submenu:** per-leaf `poi_type` counts on WATER / FOOD / REPAIR.
+- **Surface submenu:** per-`poi_detail` counts (`ASPHALT`…`SAND` and `END`). Same
+  code-overlap caveat — separate surface detail buckets. Grid SURFACE total still
+  counts stretch **starts** only (not END). No double-tap undo → leaf counts only
+  rise until stop.
+- **Open stretch:** while last surface commit was `ASPHALT`…`SAND`, show that type
+  as active until `END` / unspecified / ride stop ([SPEC §7.1](SPEC.md#71-open-stretch-indicator-all-ports)).
+- Undo of a CLOSURE decrements the detail bucket of the **first** tap in the pair.
+- Reset tallies when the ride stops; do not tally while idle/paused.
 
 It also means the **FIFO queue is load-bearing**. One tap per `compute()` is
 drained onto its own record; a single pending slot would collapse a fast

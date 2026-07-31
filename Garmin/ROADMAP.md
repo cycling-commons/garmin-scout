@@ -7,10 +7,9 @@ Post-v1.0 ideas, specced enough to pick up later. Nothing here is built yet.
 
 ## Show the open surface on the device
 
-When a surface stretch is active, the rider has no on-screen reminder that it's
-still open. A small indicator (e.g. on the bottom strip: "cobbles ↑") would help,
-especially for long stretches. Needs a little device state (the current open
-surface); deliberately left out of the first cut to keep the device dumb.
+**Now normative** — [SPEC §7.1](../docs/SPEC.md#71-open-stretch-indicator-all-ports).
+Android shows a banner + lit SURFACE tile; Garmin still needs the same reminder
+(e.g. strip: `cobbles ↑`) when a stretch is open.
 
 ## Internationalisation (i18n) — if a non-English audience shows up
 

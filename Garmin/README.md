@@ -14,7 +14,10 @@ record in the FIT file.
   to the next record. The tap feedback means you don't have to look down to know
   it landed.
 - Each tile shows its own running tally for the ride ("DANGER 3"), net of
-  retractions; an untouched tile shows no number. RESUPPLY sums its leaves.
+  retractions; an untouched tile shows no number. RESUPPLY sums its leaves;
+  CLOSURE sums all duration commits. Duration and resupply submenu leaves
+  keep their own counts too (e.g. MONTHS `2` on `CLOSED FOR?`; COBBLES on the
+  surface picker) — see [SPEC §6.7](../docs/SPEC.md#67-per-tile-tallies).
 - Tapped the wrong tile? Tap the same one again within the cancel window (3 s, or
   6 s for the two-tap tiles) and the tag is retracted — the tile stays lit for that
   whole window and its count ticks back down.

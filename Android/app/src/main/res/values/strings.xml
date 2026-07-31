@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Scout</string>
+    <string name="ride_notification_title">Scout ride</string>
+    <string name="ride_notification_recording">Recording — tap to open</string>
+    <string name="ride_notification_paused">Paused — tap to open</string>
+    <string name="channel_ride">Ride recording</string>
+</resources>

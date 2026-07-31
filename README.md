@@ -27,9 +27,9 @@ root doc (SPEC or DATA-FORMAT).
 | Folder | Status |
 | --- | --- |
 | [Garmin/](Garmin/) | Connect IQ data field (reference implementation, v1.0 shipped) |
-| [Android/](Android/) | Phone app — not started |
+| [Android/](Android/) | Phone app — **v1 phases P0–P5 done** · [setup](Android/docs/SETUP.md) · [permissions](Android/docs/PERMISSIONS.md) · [tech](Android/docs/TECHNICAL.md) · [testing](Android/docs/TESTING.md) |
 | [Hammerhead-Karoo/](Hammerhead-Karoo/) | Karoo port — not started |
-| [iPhone/](iPhone/) | iOS port — not started |
+| [iPhone/](iPhone/) | iOS port — not started (needs a Mac) |
 
 Radar pairing policy (all ports): **native ANT+ when available, otherwise
 Bluetooth LE**. See [SPEC §8](docs/SPEC.md#8-radar).
@@ -41,6 +41,7 @@ implementation):
 
 - [`Garmin/tools/fit-viewer.html`](Garmin/tools/fit-viewer.html)
 - [`Garmin/tools/test-fit-parser.mjs`](Garmin/tools/test-fit-parser.mjs)
+- Android FIT smoke: [`Android/tools/validate-scout-fit.mjs`](Android/tools/validate-scout-fit.mjs)
 
 ```sh
 node Garmin/tools/test-fit-parser.mjs Garmin/tools/fit-viewer.html
@@ -48,4 +49,4 @@ node Garmin/tools/test-fit-parser.mjs Garmin/tools/fit-viewer.html
 
 ## License
 
-MIT © BikeCoders (see each platform folder for its copy where applicable).
+[MIT](LICENSE) © BikeCoders (see each platform folder for its copy where applicable).

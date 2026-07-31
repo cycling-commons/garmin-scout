@@ -1,0 +1,241 @@
+package org.cyclingcommons.scout.domain
+
+enum class TimerState {
+    IDLE,
+    RUNNING,
+    PAUSED,
+}
+
+data class TagFeedback(
+    val undone: Boolean,
+    val flashIdx: Int,
+    val flashUntilMs: Long,
+)
+
+data class ScoutUiState(
+    val mode: UiMode = UiMode.GRID,
+    val timer: TimerState = TimerState.IDLE,
+    val tiles: List<Tile> = Tiles.grid,
+    val title: String? = null,
+    /** Per-grid-tile tallies; index matches [tiles] when mode == GRID */
+    val tileCounts: List<Int> = List(Tiles.grid.size) { 0 },
+    val flashIdx: Int = -1,
+    val flashUntilMs: Long = 0L,
+    val pendingIdx: Int = -1,
+    /** Deadline for pending submenu pick (CORRECT_MS); 0 when none. */
+    val pendingUntilMs: Long = 0L,
+    val parentIdx: Int = -1,
+    val radarLive: Boolean = false,
+    val carCount: Int = 0,
+    val lastCarSpeedKph: Int = -1,
+    val imperial: Boolean = false,
+    /** Open surface stretch detail, or [Surface.NONE] when none. */
+    val openSurfaceDetail: Int = Surface.NONE,
+    val openSurfaceLabel: String? = null,
+)
+
+/**
+ * Pure tagging / picker controller. Clock is injected so tests stay deterministic.
+ */
+class ScoutController(
+    private val queue: TagQueue = TagQueue(),
+    private val tallies: TagTallies = TagTallies(),
+) {
+    var timer: TimerState = TimerState.IDLE
+        private set
+
+    private var mode: UiMode = UiMode.GRID
+    private var parentIdx: Int = -1
+    private var pickUntilMs: Long = 0L
+
+    private var pendingType: Int = PoiType.NONE
+    private var pendingDetail: Int = Duration.NONE
+    private var pendingIdx: Int = -1
+    private var pendingUntilMs: Long = 0L
+
+    private var flashIdx: Int = -1
+    private var flashUntilMs: Long = 0L
+
+    var lastFeedback: TagFeedback? = null
+        private set
+
+    fun start() {
+        timer = TimerState.RUNNING
+        lastFeedback = null
+    }
+
+    fun pause() {
+        timer = TimerState.PAUSED
+    }
+
+    fun resume() {
+        if (timer == TimerState.PAUSED) timer = TimerState.RUNNING
+    }
+
+    fun stop() {
+        timer = TimerState.IDLE
+        closePage()
+        queue.clear()
+        tallies.clear()
+        lastFeedback = null
+    }
+
+    /** Consume pending confirm/undo feedback (null if none since last consume). */
+    fun takeFeedback(): TagFeedback? {
+        val f = lastFeedback
+        lastFeedback = null
+        return f
+    }
+
+    fun snapshot(nowMs: Long = 0L): ScoutUiState {
+        val tiles = Tiles.forMode(mode)
+        val counts =
+            when (mode) {
+                UiMode.GRID -> tiles.map { tallies.tileCount(it.code) }
+                UiMode.DURATION ->
+                    tiles.map {
+                        if (it.code == PoiType.UI_BACK) 0
+                        else tallies.closureDetailCount(it.code)
+                    }
+                UiMode.RESUPPLY ->
+                    tiles.map {
+                        if (it.code == PoiType.UI_BACK) 0
+                        else tallies.tileCount(it.code)
+                    }
+                UiMode.SURFACE ->
+                    tiles.map {
+                        if (it.code == PoiType.UI_BACK) 0
+                        else tallies.surfaceDetailCount(it.code)
+                    }
+            }
+        return ScoutUiState(
+            mode = mode,
+            timer = timer,
+            tiles = tiles,
+            title = Tiles.titleFor(mode),
+            tileCounts = counts,
+            flashIdx = if (nowMs < flashUntilMs) flashIdx else -1,
+            flashUntilMs = flashUntilMs,
+            pendingIdx = if (pendingType != PoiType.NONE) pendingIdx else -1,
+            pendingUntilMs = if (pendingType != PoiType.NONE) pendingUntilMs else 0L,
+            parentIdx = parentIdx,
+            openSurfaceDetail = tallies.openSurfaceDetail,
+            openSurfaceLabel = Tiles.surfaceLabel(tallies.openSurfaceDetail),
+        )
+    }
+
+    /**
+     * Advance picker timeouts / pending commits. Call ~every frame or on a 250ms tick.
+     * @return true if UI should refresh
+     */
+    fun onTick(nowMs: Long): Boolean {
+        if (mode == UiMode.GRID) return false
+        if (pendingType != PoiType.NONE) {
+            if (nowMs > pendingUntilMs) {
+                val pt = pendingType
+                val pd = pendingDetail
+                val pi = parentIdx
+                clearPending()
+                tag(pt, pd, pi, nowMs)
+                return true
+            }
+            return false
+        }
+        if (nowMs > pickUntilMs) {
+            when (mode) {
+                UiMode.DURATION -> tag(PoiType.CLOSURE, Duration.UNKNOWN, parentIdx, nowMs)
+                UiMode.SURFACE -> tag(PoiType.SURFACE, Surface.NONE, parentIdx, nowMs)
+                UiMode.RESUPPLY -> closePage()
+                UiMode.GRID -> Unit
+            }
+            return true
+        }
+        return false
+    }
+
+    fun onTileTap(index: Int, nowMs: Long) {
+        val set = Tiles.forMode(mode)
+        if (index !in set.indices) return
+        val code = set[index].code
+
+        when (mode) {
+            UiMode.GRID -> when (code) {
+                PoiType.CLOSURE -> openPage(UiMode.DURATION, index, nowMs)
+                PoiType.SURFACE -> openPage(UiMode.SURFACE, index, nowMs)
+                PoiType.UI_RESUPPLY -> openPage(UiMode.RESUPPLY, index, nowMs)
+                else -> tag(code, Duration.NONE, index, nowMs)
+            }
+            else -> when (code) {
+                PoiType.UI_BACK -> closePage()
+                else -> when (mode) {
+                    UiMode.DURATION -> holdPick(PoiType.CLOSURE, code, index, nowMs)
+                    UiMode.SURFACE -> holdPick(PoiType.SURFACE, code, index, nowMs)
+                    UiMode.RESUPPLY -> holdPick(code, Duration.NONE, index, nowMs)
+                    UiMode.GRID -> Unit
+                }
+            }
+        }
+    }
+
+    /** Drain one queued tag for the current sample (null → write NONE). */
+    fun drainTag(): QueuedTag? =
+        if (timer == TimerState.RUNNING) queue.poll() else null
+
+    fun queueSize(): Int = queue.size
+
+    /** One-tap END for the open surface stretch (banner / shortcut). */
+    fun endOpenSurface(nowMs: Long) {
+        if (tallies.openSurfaceDetail == Surface.NONE) return
+        val flash =
+            Tiles.grid.indexOfFirst { it.code == PoiType.SURFACE }.coerceAtLeast(0)
+        tag(PoiType.SURFACE, Surface.END, flash, nowMs)
+    }
+
+    private fun tag(type: Int, detail: Int, flashIdx: Int, nowMs: Long) {
+        if (timer != TimerState.RUNNING) {
+            // Flash + beep only — nothing is queued or tallied while idle/paused.
+            this.flashIdx = flashIdx
+            this.flashUntilMs = nowMs + Timings.FLASH_MS
+            lastFeedback = TagFeedback(undone = false, flashIdx = flashIdx, flashUntilMs = this.flashUntilMs)
+            closePage()
+            return
+        }
+        queue.offer(type, detail)
+        val undone = tallies.countTap(type, detail, nowMs)
+        val lit =
+            if (undone || type == PoiType.SURFACE) Timings.FLASH_MS
+            else undoMsFor(type)
+        this.flashIdx = flashIdx
+        this.flashUntilMs = nowMs + lit
+        lastFeedback = TagFeedback(undone, flashIdx, this.flashUntilMs)
+        closePage()
+    }
+
+    private fun openPage(newMode: UiMode, parent: Int, nowMs: Long) {
+        mode = newMode
+        parentIdx = parent
+        pickUntilMs = nowMs + Timings.PICK_MS
+        clearPending()
+    }
+
+    private fun closePage() {
+        mode = UiMode.GRID
+        parentIdx = -1
+        pickUntilMs = 0L
+        clearPending()
+    }
+
+    private fun clearPending() {
+        pendingType = PoiType.NONE
+        pendingDetail = Duration.NONE
+        pendingIdx = -1
+        pendingUntilMs = 0L
+    }
+
+    private fun holdPick(type: Int, detail: Int, idx: Int, nowMs: Long) {
+        pendingType = type
+        pendingDetail = detail
+        pendingIdx = idx
+        pendingUntilMs = nowMs + Timings.CORRECT_MS
+    }
+}

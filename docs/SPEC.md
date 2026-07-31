@@ -61,8 +61,9 @@ updating every client.
 
 ### 2.2 Device and parser must agree
 
-Anything the UI shows as a live tally (undo counts, car count, open-surface
-hint later) **must** use the same rule as the reference parser in
+Anything the UI shows as a live tally (grid undo counts, **picker/submenu
+leaf counts**, car count, open-surface hint later) **must** use the same rule
+as the reference parser in
 [`Garmin/tools/fit-viewer.html`](../Garmin/tools/fit-viewer.html). Change both;
 add a test.
 
@@ -253,6 +254,7 @@ Tile colours (RGB, for visual parity):
 
 1. Tap → enqueue `(type, detail=0)`, update tallies, haptic/tone confirm.
 2. Tile stays lit for the **undo window** (3 s) as a “tap again to cancel” cue.
+   Phone UIs may show the remaining seconds inside the lit tile.
 3. Same type again inside the window → both taps are written; live tally
    decrements (parser will cancel the pair). Distinct undo feedback (double
    pulse / reset tone).
@@ -272,7 +274,8 @@ Opening a picker does **not** write a tag yet.
 **Pick held, not committed:** choosing a subitem lights that tile and starts
 `CORRECT_MS`. Another subitem replaces the pending choice (only the last is
 ever written). When `CORRECT_MS` elapses → commit type+detail, beep, return to
-grid. BACK during the window → abort, no tag.
+grid. BACK during the window → abort, no tag. Phone UIs may show the remaining
+seconds inside the lit subitem tile.
 
 **Timeout with no pick:**
 
@@ -299,12 +302,38 @@ no header (tiles name themselves).
 
 ### 6.7 Per-tile tallies
 
-- Shown on the main grid when > 0 (`"DANGER 3"`); untouched tiles show no number.
+**Normative for every port** (Garmin, Android, Karoo, iOS, …). Live tallies are
+display-only mirrors of the parser undo rule — they never change what is written
+to the file. See also [DATA-FORMAT.md](DATA-FORMAT.md) (Undo).
+
+**Main grid** (when count > 0; untouched tiles show no number):
+
+- Shown as label + count (e.g. `DANGER` with `3` beneath / beside).
 - Counts mirror parser undo: same type within undo window annihilates for
   display; both taps still go to the file.
-- RESUPPLY tile shows sum of WATER + FOOD + MECHANICAL.
+- RESUPPLY folder tile shows the **sum** of WATER + FOOD + MECHANICAL.
+- CLOSURE tile shows the **sum** of all committed closure durations.
 - SURFACE tally counts only stretch **starts** (detail in `ASPHALT..SAND`), not
   END.
+
+**Picker / submenu tallies** (same ride, same undo rules; shown when > 0):
+
+| Picker | What each leaf shows |
+| --- | --- |
+| Duration (`CLOSED FOR?`) | Per-**detail** count: how many times that duration (`TODAY` … `UNKNOWN`) was committed this ride. BACK never tallies. |
+| Resupply (`WHAT KIND?`) | Per-leaf `poi_type` count (WATER / FOOD / MECHANICAL). BACK never tallies. |
+| Surface | Per-**detail** count: how many times that surface leaf (`ASPHALT` … `SAND`, and `END`) was committed this ride. BACK never tallies. (Grid SURFACE total still counts **starts only**, not END.) |
+
+Closure and surface detail buckets are independent of `poi_type` indices
+(duration / surface codes overlap numeric `poi_type` values — implementations
+**must not** index the `poi_type` count array by those detail codes to paint
+picker leaves). On undo of a CLOSURE, decrement both the grid CLOSURE total and
+the **detail bucket of the first tap** in the undone pair (not necessarily the
+second tap’s detail). SURFACE has no double-tap undo, so surface leaf counts
+only ever increase until the ride stops.
+
+Tallies reset when the ride stops (timer → idle). Idle/paused taps must not
+change tallies.
 
 ### 6.8 Undo windows (must match parser)
 
@@ -335,6 +364,24 @@ Surface is recorded as **transition points**; the parser joins them into runs.
 Parser (`buildSurfaceSegments`): type opens; switch closes-and-opens; END
 closes; unterminated stretch closes at ride end and is flagged. Accidental
 start → END immediately (near-zero stretch). No double-tap undo on surface.
+
+### 7.1 Open-stretch indicator (all ports)
+
+While a stretch is open (last committed surface detail in `ASPHALT..SAND`, not
+yet `END`), the UI **must** remind the rider so the stretch is not left open by
+mistake:
+
+- Keep device state: current open detail (or “none”).
+- Show it on the main tagging surface (e.g. strip / banner: `surface open:
+  COBBLES`, and/or keep the SURFACE tile lit with the type name).
+- The indicator **may be tappable** to commit `SURFACE` + `END` immediately
+  (same as picking END in the picker) — recommended on phone UIs.
+- Clear the indicator on `END`, on unspecified (`detail=0`) commit, and when the
+  ride stops.
+- Switching type updates the indicator to the new type (does not clear).
+
+Recording indicator (dot): **green while the timer is RUNNING**, **red when
+idle or paused** (not writing samples).
 
 ---
 
@@ -454,13 +501,11 @@ When using native ANT+:
 
 | Element | Spec |
 | --- | --- |
-| Recording dot | Top-right (or equivalent): red = timer running; grey = paused/stopped |
+| Recording dot | Top-right (or equivalent): **green** = timer running; **red** = idle/paused |
 | Radar strip | Bottom of tagging surface; separator line; auto-shrink font to fit |
 | Strip copy | `"no radar"` \| `"{n} cars"` optional `"{speed} ±5 kph"` / mph |
+| Open surface | While a stretch is open: visible reminder with type name (§7.1) |
 | Grid layout | 2 columns; rows = ceil(nTiles / 2); tiles fill grid height above strip |
-
-Roadmap (not required for v1 parity): indicator of currently open surface
-stretch on the strip.
 
 ---
 
@@ -492,7 +537,9 @@ stretch on the strip.
 - [ ] FIFO tag queue; one tag per sample; queue capacity ≥ 16.
 - [ ] Stable `poi_type` / `poi_detail` codes (§5).
 - [ ] Surface as transitions + END; no surface double-tap undo.
-- [ ] Double-tap undo semantics for point types; live tallies match parser.
+- [ ] Double-tap undo semantics for point types; live tallies match parser
+      (main grid **and** duration / resupply / surface submenu leaves — §6.7).
+- [ ] Open surface-stretch indicator while a type is active (§7.1).
 - [ ] Haptic or tone confirmation; distinct undo feedback when possible.
 - [ ] Recording indicator.
 - [ ] Optional radar via **ANT+ if available, else BLE** (§8); normalized samples;
@@ -507,6 +554,8 @@ stretch on the strip.
 - [ ] Persist preferred radar device and transport preference.
 - [ ] Unit-aware speed display from system locale / settings.
 - [ ] Foreground-friendly ride mode (screen reachable without deep menus).
+- [ ] Prefer the lowest location / radio duty cycle that still meets §4 and §8
+      while recording (see §12.1).
 
 ### Must not
 
@@ -515,6 +564,8 @@ stretch on the strip.
 - [ ] Renumber existing type/detail codes.
 - [ ] Put undo / vehicle identity / surface joining solely on-device without a
       matching parser rule (display mirrors are OK; file stays raw).
+- [ ] Keep high-rate GPS, radar scan, or screen wake active when not recording
+      (paused/stopped/idle), except briefly for user-driven pairing.
 
 ---
 
@@ -524,11 +575,52 @@ stretch on the strip.
 | --- | --- |
 | Eyes on road | Large hit targets; confirmation without looking |
 | Reliability | Tagging survives radar failure; radar failure never corrupts tags |
-| Battery | Prefer connection strategies that allow ride-length radar use |
+| **Battery** | **As low as possible for a multi-hour ride** — see §12.1 |
 | Localization | English labels acceptable for v1; strings should be externalizable |
 | License | MIT, consistent with Garmin Scout |
 
----
+### 12.1 Battery (normative)
+
+Phone ports burn far more power than a Garmin data field. **Battery life is a
+first-class requirement**, not a polish item. A typical tour/bikepacking ride
+must remain practical on one charge alongside the rider’s normal phone use.
+
+**Principles**
+
+1. **Nothing expensive while idle.** Outside an active recording session: no
+   high-accuracy GPS stream, no radar connection/scan loop, no sticky wake lock,
+   no forced bright screen.
+2. **Recording = pay only for what Scout needs.** While the timer is running:
+   ~1 Hz samples (§4), optional radar if the user enabled it, screen behaviour
+   the rider chose. No network, no analytics, no spare sensors.
+3. **Paused / stopped = drop duty cycle immediately.** Stop or sharply throttle
+   GPS; disconnect or stop scanning radar; release wake locks; allow normal
+   display timeout unless the rider is actively in a pairing flow.
+4. **Prefer connected sensors over scanning.** After pairing, maintain a
+   connection and consume notifications. Do not continuous-scan for radars
+   during a ride. Prefer **native ANT+ when available** (typically cheaper than
+   BLE for this class of accessory); otherwise BLE (§8).
+5. **Location: accurate enough, not maximum always.** Use the coarsest location
+   mode that still yields usable tag positions and rider speed for the strip.
+   Do not combine redundant providers “just in case.”
+6. **I/O frugally.** Buffer FIT/activity writes; avoid flushing every sample to
+   flash if the platform allows safe periodic flush + flush-on-pause/stop.
+7. **Screen is optional burn.** Default to normal system brightness / timeout
+   policies where safe; offer an explicit “keep screen on while recording”
+   toggle (off by default or rider-controlled) rather than forcing it always.
+8. **Radar is opt-in.** If no radar is paired/enabled, pay zero radio cost for
+   it. Tagging alone must stay light.
+
+**Acceptable trade**
+
+Slightly coarser GPS when the OS batches fixes is fine; inventing positions or
+skipping the ~1 Hz **Scout channel** cadence while recording is not. Prefer
+dropping display frills before dropping recording correctness.
+
+**Measure**
+
+Phone ports should sanity-check multi-hour recording (with and without radar) on
+a real device and treat regressions in idle drain or ride drain as bugs.
 
 ## 13. Platform notes
 
@@ -538,7 +630,7 @@ in that platform’s folder; keep a one-line pointer below when a delta exists.
 | Platform | Folder | Notes / deltas |
 | --- | --- | --- |
 | Garmin Connect IQ | [`Garmin/`](../Garmin/) | Reference implementation. Data field + FitContributor; ANT+ via `Toybox.AntPlus.BikeRadar`; touch Edge only; picker pages are field repaints (no `pushView`). Publishing: [`Garmin/docs/PUBLISHING.md`](../Garmin/docs/PUBLISHING.md). |
-| Android phone | [`Android/`](../Android/) | Standalone ride app. Radar: native ANT+ when present, else BLE (§8). Prefer FIT with the same developer field names/ids. *(no deltas yet)* |
+| Android phone | [`Android/`](../Android/) | Standalone ride app (**P0–P5**). Tech: [`Android/docs/TECHNICAL.md`](../Android/docs/TECHNICAL.md) · setup: [`Android/docs/SETUP.md`](../Android/docs/SETUP.md). Radar: ANT+ if present, else BLE (§8). Original FIT (SPEC §4.2 fields only). Battery: §12.1. **No on-disk delta** vs this SPEC / DATA-FORMAT. |
 | Hammerhead Karoo | [`Hammerhead-Karoo/`](../Hammerhead-Karoo/) | *(not started — no deltas yet)* |
 | iPhone | [`iPhone/`](../iPhone/) | *(not started — no deltas yet)* |
 
