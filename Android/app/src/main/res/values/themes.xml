@@ -1,3 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Scout" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Cold start opens on the page colour instead of flashing the opposite one.
+         This can only follow the system; MainActivity repaints it when the rider has
+         overridden the appearance. -->
+    <style name="Theme.Scout" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/screen_background</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
 </resources>

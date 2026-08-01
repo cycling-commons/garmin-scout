@@ -7,8 +7,9 @@ object FitCrc {
         0xA001, 0x6C00, 0x7800, 0xB401, 0x5000, 0x9C01, 0x8801, 0x4400,
     )
 
-    fun crc16(bytes: ByteArray, start: Int = 0, end: Int = bytes.size): Int {
-        var crc = 0
+    /** [seed] continues a CRC across chunks; 0 starts a fresh one. */
+    fun crc16(bytes: ByteArray, start: Int = 0, end: Int = bytes.size, seed: Int = 0): Int {
+        var crc = seed and 0xFFFF
         for (i in start until end) {
             val b = bytes[i].toInt() and 0xFF
             var t = TABLE[crc and 0xF]

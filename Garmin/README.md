@@ -13,7 +13,7 @@ record in the FIT file.
   (whichever your device supports and you haven't muted), and the code is written
   to the next record. The tap feedback means you don't have to look down to know
   it landed.
-- Each tile shows its own running tally for the ride ("DANGER 3"), net of
+- Each tile shows its own running tally for the ride ("BEWARE 3"), net of
   retractions; an untouched tile shows no number. RESUPPLY sums its leaves;
   CLOSURE sums all duration commits. Duration and resupply submenu leaves
   keep their own counts too (e.g. MONTHS `2` on `CLOSED FOR?`; COBBLES on the

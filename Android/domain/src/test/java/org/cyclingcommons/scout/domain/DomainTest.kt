@@ -3,6 +3,7 @@ package org.cyclingcommons.scout.domain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -11,9 +12,9 @@ class TagTalliesTest {
     fun directUndoWithinWindow() {
         val t = TagTallies()
         assertFalse(t.countTap(PoiType.DANGER, 0, 1000))
-        assertEquals(1, t.count(PoiType.DANGER))
+        assertEquals(1, t.tileCount(PoiType.DANGER))
         assertTrue(t.countTap(PoiType.DANGER, 0, 2000))
-        assertEquals(0, t.count(PoiType.DANGER))
+        assertEquals(0, t.tileCount(PoiType.DANGER))
     }
 
     @Test
@@ -21,7 +22,7 @@ class TagTalliesTest {
         val t = TagTallies()
         t.countTap(PoiType.DANGER, 0, 1000)
         assertFalse(t.countTap(PoiType.DANGER, 0, 1000 + Timings.UNDO_MS))
-        assertEquals(2, t.count(PoiType.DANGER))
+        assertEquals(2, t.tileCount(PoiType.DANGER))
     }
 
     @Test
@@ -29,7 +30,7 @@ class TagTalliesTest {
         val t = TagTallies()
         t.countTap(PoiType.CLOSURE, Duration.TODAY, 1000)
         assertTrue(t.countTap(PoiType.CLOSURE, Duration.DAYS, 1000 + Timings.UNDO_MS + 500))
-        assertEquals(0, t.count(PoiType.CLOSURE))
+        assertEquals(0, t.tileCount(PoiType.CLOSURE))
     }
 
     @Test
@@ -37,14 +38,14 @@ class TagTalliesTest {
         val t = TagTallies()
         t.countTap(PoiType.SURFACE, Surface.COBBLES, 1000)
         assertFalse(t.countTap(PoiType.SURFACE, Surface.GRAVEL, 1500))
-        assertEquals(2, t.count(PoiType.SURFACE))
+        assertEquals(2, t.tileCount(PoiType.SURFACE))
     }
 
     @Test
     fun surfaceEndDoesNotTally() {
         val t = TagTallies()
         t.countTap(PoiType.SURFACE, Surface.END, 1000)
-        assertEquals(0, t.count(PoiType.SURFACE))
+        assertEquals(0, t.tileCount(PoiType.SURFACE))
     }
 
     @Test
@@ -64,7 +65,7 @@ class TagTalliesTest {
         t.countTap(PoiType.CLOSURE, Duration.TODAY, 1000 + gap * 2)
         assertEquals(2, t.closureDetailCount(Duration.MONTHS))
         assertEquals(1, t.closureDetailCount(Duration.TODAY))
-        assertEquals(3, t.count(PoiType.CLOSURE))
+        assertEquals(3, t.tileCount(PoiType.CLOSURE))
     }
 
     @Test
@@ -74,7 +75,7 @@ class TagTalliesTest {
         assertEquals(1, t.closureDetailCount(Duration.MONTHS))
         assertTrue(t.countTap(PoiType.CLOSURE, Duration.DAYS, 2000))
         assertEquals(0, t.closureDetailCount(Duration.MONTHS))
-        assertEquals(0, t.count(PoiType.CLOSURE))
+        assertEquals(0, t.tileCount(PoiType.CLOSURE))
     }
 
     @Test
@@ -86,7 +87,7 @@ class TagTalliesTest {
         assertEquals(1, t.surfaceDetailCount(Surface.COBBLES))
         assertEquals(1, t.surfaceDetailCount(Surface.GRAVEL))
         assertEquals(1, t.surfaceDetailCount(Surface.END))
-        assertEquals(2, t.count(PoiType.SURFACE)) // starts only
+        assertEquals(2, t.tileCount(PoiType.SURFACE)) // starts only
     }
 
     @Test
@@ -130,7 +131,15 @@ class ScoutControllerTest {
         c.onTileTap(0, 1000) // DANGER while idle
         assertEquals(0, c.queueSize())
         assertEquals(0, c.snapshot().tileCounts[0])
-        assertNotNull(c.takeFeedback()) // flash/beep still confirms the tap
+        assertNull(c.takeFeedback())
+        assertEquals(UiMode.GRID, c.snapshot().mode)
+    }
+
+    @Test
+    fun idleTapDoesNotOpenPicker() {
+        val c = ScoutController()
+        c.onTileTap(1, 1000) // CLOSURE while idle
+        assertEquals(UiMode.GRID, c.snapshot().mode)
     }
 
     @Test

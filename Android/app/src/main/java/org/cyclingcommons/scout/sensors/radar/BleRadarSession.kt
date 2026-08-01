@@ -25,7 +25,6 @@ import org.cyclingcommons.scout.domain.RadarLinkState
 import org.cyclingcommons.scout.domain.RadarObservation
 import org.cyclingcommons.scout.domain.RadarTarget
 import org.cyclingcommons.scout.domain.VariaV1Decoder
-import org.cyclingcommons.scout.ui.RadarDeviceRow
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
@@ -314,12 +313,9 @@ class BleRadarSession(context: Context) {
             return
         }
         gattClosing = false
-        gatt = if (Build.VERSION.SDK_INT >= 23) {
-            device.connectGatt(app, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
-        } else {
-            @Suppress("DEPRECATION")
-            device.connectGatt(app, false, gattCallback)
-        }
+        // TRANSPORT_LE explicitly: dual-mode radars otherwise get probed over BR/EDR.
+        @Suppress("DEPRECATION")
+        gatt = device.connectGatt(app, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         mainHandler.removeCallbacks(connectTimeout)
         mainHandler.postDelayed(connectTimeout, CONNECT_TIMEOUT_MS)
     }
@@ -533,9 +529,7 @@ class BleRadarSession(context: Context) {
     @SuppressLint("MissingPermission")
     private fun startRadarProtocol(g: BluetoothGatt) {
         try {
-            if (Build.VERSION.SDK_INT >= 21) {
-                g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
-            }
+            g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
         } catch (_: Exception) {
             // ignore
         }

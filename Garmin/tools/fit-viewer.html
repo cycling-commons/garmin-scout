@@ -286,7 +286,7 @@ const semiToDeg = (s) => s == null ? null : s * (180 / Math.pow(2, 31));
 const fitToDate = (t) => t == null ? null : new Date((t + FIT_EPOCH) * 1000);
 
 // --- poi-tagger specific decoding (must match PoiTaggerView.mc) ---
-const POI_TYPE = { 1: 'DANGER', 2: 'SCENERY', 3: 'WATER', 4: 'OTHER',
+const POI_TYPE = { 1: 'BEWARE', 2: 'SCENERY', 3: 'WATER', 4: 'OTHER',
                    5: 'CLOSURE', 6: 'SURFACE', 7: 'FOOD', 8: 'MECHANICAL' };
 const POI_COLOR = { 1: '#d1421f', 2: '#2e8b57', 3: '#1e7fc0', 4: '#b58900',
                     5: '#8e44ad', 6: '#8e5a2b', 7: '#e67e22', 8: '#7f8c8d' };

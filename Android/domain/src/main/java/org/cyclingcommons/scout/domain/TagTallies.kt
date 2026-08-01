@@ -29,9 +29,6 @@ class TagTallies {
     var openSurfaceDetail: Int = Surface.NONE
         private set
 
-    fun count(type: Int): Int =
-        if (type in 1 until counts.size) counts[type] else 0
-
     fun closureDetailCount(detail: Int): Int =
         if (detail in Duration.TODAY..Duration.UNKNOWN) closureDetails[detail] else 0
 
@@ -56,7 +53,8 @@ class TagTallies {
             else -> 0
         }
 
-    fun tileCounts(type: Int, detail: Int): Boolean =
+    /** SPEC §6.7: the grid SURFACE tally counts stretch starts, never END. */
+    fun countsTowardGridTile(type: Int, detail: Int): Boolean =
         type != PoiType.SURFACE || detail in Surface.ASPHALT..Surface.SAND
 
     /** @return true if this tap cancelled a pair (undo) */
@@ -77,7 +75,7 @@ class TagTallies {
             lastTapDetail = Duration.NONE
             undone = true
         } else {
-            if (tileCounts(type, detail)) {
+            if (countsTowardGridTile(type, detail)) {
                 counts[type]++
             }
             when {

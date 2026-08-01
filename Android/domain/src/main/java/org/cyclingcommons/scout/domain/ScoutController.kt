@@ -17,8 +17,10 @@ data class ScoutUiState(
     val timer: TimerState = TimerState.IDLE,
     val tiles: List<Tile> = Tiles.grid,
     val title: String? = null,
-    /** Per-grid-tile tallies; index matches [tiles] when mode == GRID */
+    /** Per-tile tallies for the current page; index matches [tiles]. */
     val tileCounts: List<Int> = List(Tiles.grid.size) { 0 },
+    /** Every tag committed this ride, independent of which page is showing. */
+    val tagTotal: Int = 0,
     val flashIdx: Int = -1,
     val flashUntilMs: Long = 0L,
     val pendingIdx: Int = -1,
@@ -114,6 +116,7 @@ class ScoutController(
             tiles = tiles,
             title = Tiles.titleFor(mode),
             tileCounts = counts,
+            tagTotal = Tiles.grid.sumOf { tallies.tileCount(it.code) },
             flashIdx = if (nowMs < flashUntilMs) flashIdx else -1,
             flashUntilMs = flashUntilMs,
             pendingIdx = if (pendingType != PoiType.NONE) pendingIdx else -1,
@@ -123,6 +126,13 @@ class ScoutController(
             openSurfaceLabel = Tiles.surfaceLabel(tallies.openSurfaceDetail),
         )
     }
+
+    /**
+     * True while a picker page, a held pick, or a lit tile still needs sub-second
+     * updates. When this is false and the timer is idle, nothing has to tick at all.
+     */
+    fun needsTick(nowMs: Long): Boolean =
+        mode != UiMode.GRID || pendingType != PoiType.NONE || nowMs < flashUntilMs
 
     /**
      * Advance picker timeouts / pending commits. Call ~every frame or on a 250ms tick.
@@ -154,6 +164,7 @@ class ScoutController(
     }
 
     fun onTileTap(index: Int, nowMs: Long) {
+        if (timer != TimerState.RUNNING) return
         val set = Tiles.forMode(mode)
         if (index !in set.indices) return
         val code = set[index].code
@@ -185,6 +196,7 @@ class ScoutController(
 
     /** One-tap END for the open surface stretch (banner / shortcut). */
     fun endOpenSurface(nowMs: Long) {
+        if (timer != TimerState.RUNNING) return
         if (tallies.openSurfaceDetail == Surface.NONE) return
         val flash =
             Tiles.grid.indexOfFirst { it.code == PoiType.SURFACE }.coerceAtLeast(0)
@@ -192,14 +204,6 @@ class ScoutController(
     }
 
     private fun tag(type: Int, detail: Int, flashIdx: Int, nowMs: Long) {
-        if (timer != TimerState.RUNNING) {
-            // Flash + beep only — nothing is queued or tallied while idle/paused.
-            this.flashIdx = flashIdx
-            this.flashUntilMs = nowMs + Timings.FLASH_MS
-            lastFeedback = TagFeedback(undone = false, flashIdx = flashIdx, flashUntilMs = this.flashUntilMs)
-            closePage()
-            return
-        }
         queue.offer(type, detail)
         val undone = tallies.countTap(type, detail, nowMs)
         val lit =

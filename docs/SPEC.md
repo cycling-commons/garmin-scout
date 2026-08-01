@@ -77,8 +77,10 @@ add a test.
 - Writes only to the rider’s own activity file (and local preferences such as
   paired radar id).
 - No network required for core function.
-- Upload / contribution to Cycling Commons (or anything else) is **opt-in and
-  out of band** in v1; the recorder never phones home.
+- Upload / contribution to Cycling Commons (or anything else) is **opt-in**; the
+  recorder never phones home while recording. Optional in-app sharing of a
+  *finished* ride is specified in **[SHARING.md](SHARING.md)** (not yet required
+  for v1 parity on every port).
 - Radar is optional: tagging works with no radar.
 
 ---
@@ -121,9 +123,9 @@ Optional accessories:
 | Timer state | Behaviour |
 | --- | --- |
 | Running | Samples are written; taps enqueue tags that drain onto samples |
-| Paused / stopped | UI may still flash, but **nothing is written** to the activity |
+| Paused / stopped (idle) | **No tagging simulation** — tiles must not flash, pickers must not open, nothing is written. UI shows a brief prompt above the controls (with **Start ride** / **Resume** action) if the rider taps a tile |
 
-A **recording indicator** (e.g. red vs grey dot) must reflect this so the rider
+A **recording indicator** (e.g. green vs red dot) must reflect this so the rider
 knows whether taps will land in the file.
 
 ### 4.2 Sample cadence
@@ -162,17 +164,17 @@ writing original FIT when feasible so existing ingest tools keep working.
 
 ### 5.1 `poi_type` (append-only)
 
-| Code | Name | Grid behaviour |
-| --- | --- | --- |
-| 0 | NONE | — |
-| 1 | DANGER | Direct tag |
-| 2 | SCENERY | Direct tag |
-| 3 | WATER | Resupply leaf |
-| 4 | OTHER | Direct tag |
-| 5 | CLOSURE | Opens duration picker |
-| 6 | SURFACE | Opens surface picker (segment channel) |
-| 7 | FOOD | Resupply leaf |
-| 8 | MECHANICAL | Resupply leaf (“REPAIR” on UI) |
+| Code | Name | UI label | Grid behaviour |
+| --- | --- | --- | --- |
+| 0 | NONE | — | — |
+| 1 | DANGER | BEWARE | Direct tag |
+| 2 | SCENERY | SCENERY | Direct tag |
+| 3 | WATER | WATER | Resupply leaf |
+| 4 | OTHER | OTHER | Direct tag |
+| 5 | CLOSURE | CLOSURE | Opens duration picker |
+| 6 | SURFACE | SURFACE | Opens surface picker (segment channel) |
+| 7 | FOOD | FOOD | Resupply leaf |
+| 8 | MECHANICAL | REPAIR | Resupply leaf |
 
 UI-only codes (never written): `254` = RESUPPLY folder, `255` = BACK.
 
@@ -229,20 +231,20 @@ taps — taps on the strip resolve to the tile above.
 ### 6.1 Main grid (2 columns)
 
 ```
-┌──────────┬───────────┐
-│  DANGER  │  CLOSURE  │
-├──────────┼───────────┤
+┌───────────┬───────────┐
+│  BEWARE  │  CLOSURE  │
+├───────────┼───────────┤
 │ SURFACE  │ RESUPPLY  │
-├──────────┼───────────┤
+├───────────┼───────────┤
 │  SCENERY │  OTHER    │
-└──────────┴───────────┘
+└───────────┴───────────┘
 ```
 
 Tile colours (RGB, for visual parity):
 
 | Tile | Colour |
 | --- | --- |
-| DANGER | `#D1421F` |
+| BEWARE | `#D1421F` |
 | CLOSURE | `#8E44AD` |
 | SURFACE | `#8E5A2B` |
 | RESUPPLY | `#1E7FC0` |
@@ -250,7 +252,7 @@ Tile colours (RGB, for visual parity):
 | OTHER | `#B58900` |
 | BACK (pickers) | `#444444` |
 
-### 6.2 Direct tags (DANGER, SCENERY, OTHER)
+### 6.2 Direct tags (BEWARE, SCENERY, OTHER)
 
 1. Tap → enqueue `(type, detail=0)`, update tallies, haptic/tone confirm.
 2. Tile stays lit for the **undo window** (3 s) as a “tap again to cancel” cue.
@@ -308,7 +310,7 @@ to the file. See also [DATA-FORMAT.md](DATA-FORMAT.md) (Undo).
 
 **Main grid** (when count > 0; untouched tiles show no number):
 
-- Shown as label + count (e.g. `DANGER` with `3` beneath / beside).
+- Shown as label + count (e.g. `BEWARE` with `3` beneath / beside).
 - Counts mirror parser undo: same type within undo window annihilates for
   display; both taps still go to the file.
 - RESUPPLY folder tile shows the **sum** of WATER + FOOD + MECHANICAL.
@@ -339,7 +341,7 @@ change tallies.
 
 | Tag class | Window |
 | --- | --- |
-| Direct (DANGER, SCENERY, OTHER) | 3 s |
+| Direct (BEWARE, SCENERY, OTHER) | 3 s |
 | Two-tap leaves (CLOSURE, WATER, FOOD, MECHANICAL) | 6 s |
 | SURFACE | **Exempt** — second surface tag is a transition, never an undo |
 
@@ -348,6 +350,10 @@ change tallies.
 Eyes-on-road: short vibration if available and enabled; else tone if available
 and enabled. Undo uses a distinct pattern. Failure to buzz/beep must not block
 tagging.
+
+**While not recording** (idle or paused): no flash, haptic, tone, or picker
+navigation — only the idle prompt in §4.1. This avoids training the rider that
+taps “work” when nothing is being written.
 
 ---
 
@@ -502,17 +508,29 @@ When using native ANT+:
 | Element | Spec |
 | --- | --- |
 | Recording dot | Top-right (or equivalent): **green** = timer running; **red** = idle/paused |
+| Idle tile tap | Brief message above controls with **Start ride** / **Resume** action (§4.1); no tile flash or picker |
+| Stop ride | **Confirm** before ending a recording session and saving the file |
 | Radar strip | Bottom of tagging surface; separator line; auto-shrink font to fit |
 | Strip copy | `"no radar"` \| `"{n} cars"` optional `"{speed} ±5 kph"` / mph |
 | Open surface | While a stretch is open: visible reminder with type name (§7.1) |
 | Grid layout | 2 columns; rows = ceil(nTiles / 2); tiles fill grid height above strip |
+| Help | In-app rider help; instance-specific copy via a committed template + local override (Android: `help/help.example.json` → `help.json`) |
+| Appearance | Light and dark themes; rider-selectable (direct sun vs dusk/OLED) on platforms that support it |
+| Brand header | App mark + name grouped tightly; name in brand colour on ride screen |
+
+Optional **share to Atlas** UI (when implemented) uses the instance URL from a
+build-time env template (Android: `.env.example` → `.env.dev.local`); see
+[SHARING.md](SHARING.md), [CUSTOMIZATION.md](CUSTOMIZATION.md), and
+[ATLAS-SERVER.md](ATLAS-SERVER.md) for fork setup and backend requirements.
 
 ---
 
 ## 10. Data lifecycle & interoperability
 
 1. During ride: append samples to the activity container.
-2. After ride: rider owns the file. Scout does not upload.
+2. After ride: rider owns the file on the device. Scout does not upload during
+   or after recording unless the rider explicitly shares a finished file (see
+   [SHARING.md](SHARING.md) when that feature is enabled on a port).
 3. Inspect: reference viewer / parser (`fit-viewer.html` logic) or any tool that
    understands the Scout channels.
 4. Contribute (optional): upload original file to a project that ingests Scout
@@ -542,6 +560,8 @@ When using native ANT+:
 - [ ] Open surface-stretch indicator while a type is active (§7.1).
 - [ ] Haptic or tone confirmation; distinct undo feedback when possible.
 - [ ] Recording indicator.
+- [ ] Idle/paused: tile taps do not simulate tagging; rider sees start-first prompt (§4.1).
+- [ ] Stop recording requires confirmation before saving.
 - [ ] Optional radar via **ANT+ if available, else BLE** (§8); normalized samples;
       invalid `255` when not tracking.
 - [ ] Live car tally + ground speed using the shared corroboration rule.
@@ -630,7 +650,7 @@ in that platform’s folder; keep a one-line pointer below when a delta exists.
 | Platform | Folder | Notes / deltas |
 | --- | --- | --- |
 | Garmin Connect IQ | [`Garmin/`](../Garmin/) | Reference implementation. Data field + FitContributor; ANT+ via `Toybox.AntPlus.BikeRadar`; touch Edge only; picker pages are field repaints (no `pushView`). Publishing: [`Garmin/docs/PUBLISHING.md`](../Garmin/docs/PUBLISHING.md). |
-| Android phone | [`Android/`](../Android/) | Standalone ride app (**P0–P5**). Tech: [`Android/docs/TECHNICAL.md`](../Android/docs/TECHNICAL.md) · setup: [`Android/docs/SETUP.md`](../Android/docs/SETUP.md). Radar: ANT+ if present, else BLE (§8). Original FIT (SPEC §4.2 fields only). Battery: §12.1. **No on-disk delta** vs this SPEC / DATA-FORMAT. |
+| Android phone | [`Android/`](../Android/) | Standalone ride app (**P0–P6**). Tech: [`Android/docs/TECHNICAL.md`](../Android/docs/TECHNICAL.md) · setup: [`Android/docs/SETUP.md`](../Android/docs/SETUP.md) · sharing contract: [SHARING.md](SHARING.md). Radar: ANT+ if present, else BLE (§8). Original FIT (SPEC §4.2 fields only). Battery: §12.1. UI: light/dark, help template, instance `.env` template, stop confirm, idle-tap guard (§9). Sharing to Atlas: specified, not yet shipped. **No on-disk delta** vs this SPEC / DATA-FORMAT for recording. |
 | Hammerhead Karoo | [`Hammerhead-Karoo/`](../Hammerhead-Karoo/) | *(not started — no deltas yet)* |
 | iPhone | [`iPhone/`](../iPhone/) | *(not started — no deltas yet)* |
 

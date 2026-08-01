@@ -56,7 +56,7 @@ What they cover today:
 | `VehicleCounterTest` | 1 s blip discarded, corroborated arrival, dropout clears pending |
 | `VariaV1DecoderTest` | BLE V1 threats, speed/flag, FIT 255 vs empty-road 0 |
 | `AntPlusBikeRadarDecoderTest` | Pages 48/49 range & closing speed |
-| `ScoutFitWriterTest` | Header/CRC, scenario encode, flush file |
+| `ScoutFitWriterTest` | Header/CRC, scenario encode, streamed flushes byte-match the one-shot encode, mid-ride flush leaves a valid file |
 
 What they **do not** cover: location hardware, GATT/ANT Radio Service, Compose UI,
 Settings share/delete, FGS, permissions dialogs.
@@ -68,9 +68,12 @@ After `:fit:test` (writes `fit/build/scout-scenario.fit`):
 ```sh
 # from Scout repo root
 node Android/tools/validate-scout-fit.mjs Garmin/tools/fit-viewer.html Android/fit/build/scout-scenario.fit
+node Android/tools/validate-scout-fit.mjs Garmin/tools/fit-viewer.html Android/fit/build/scout-scenario-streamed.fit
 ```
 
-**Expect:** CRC ok, 60 records, tags/undo, surface segments, 2 vehicles.
+**Expect (both files):** CRC ok, 60 records, tags/undo, surface segments, 2 vehicles.
+The second file is written the way the app writes — append plus periodic flush — so
+run it whenever `ScoutFitWriter` changes.
 
 Optional: open `Garmin/tools/fit-viewer.html` in a browser and drop the same file.
 
@@ -79,6 +82,15 @@ Shared CI-style parser suite (Garmin reference):
 ```sh
 node Garmin/tools/test-fit-parser.mjs Garmin/tools/fit-viewer.html
 ```
+
+### 2.3 Lint
+
+```powershell
+.\gradlew.bat :app:lintDebug
+```
+
+**Expect:** `BUILD SUCCESSFUL`, no errors. Lint needs network the first time (it
+resolves `lint-gradle`), so do not pass `--offline`.
 
 ---
 
@@ -95,15 +107,17 @@ testing BLE radar).
 | # | Step | Pass if |
 | --- | --- | --- |
 | 1 | Idle → **Start** | Red recording dot; FGS notification “recording” |
-| 2 | Wait ~10 s outdoors / with fake GPS | Status shows a lat/lon (not stuck on `no fix` forever outdoors) |
-| 3 | Tap DANGER, SCENERY, OTHER | Flash + tallies increment |
-| 4 | Tap DANGER twice quickly | Tally undoes (SPEC undo) |
+| 1b | Idle → tap any tile | Banner above controls: “Start your ride…” with **Start ride** action; no flash/picker |
+| 1c | Paused → tap any tile | “Resume your ride…” with **Resume** action |
+| 2 | Wait ~10 s outdoors / with fake GPS | Status shows `GPS · ±N m` (not stuck on `Waiting for GPS` forever outdoors) |
+| 3 | Tap BEWARE, SCENERY, OTHER | Flash + tallies increment |
+| 4 | Tap BEWARE twice quickly | Tally undoes (SPEC undo) |
 | 5 | CLOSURE → pick TODAY → wait 3 s | Beep/haptic; grid CLOSURE tally up; reopen picker → TODAY shows `1` |
 | 5b | CLOSURE → MONTHS (later, outside undo) → reopen | MONTHS shows its own count; CLOSURE total = sum of durations |
 | 6 | SURFACE → COBBLES → later END | Banner `surface open: COBBLES`; SURFACE tile lit with type; clears on END |
 | 7 | RESUPPLY → leave 12 s | No resupply tag |
 | 8 | **Pause** | Grey dot; GPS stops; taps do not enqueue |
-| 9 | **Resume** → **Stop** | Notification gone; “saved scout-….fit” |
+| 9 | **Stop** | Notification gone; “saved scout-….fit”; confirm dialog shown first |
 | 10 | **Share FIT** or Settings → ride → Share | Share sheet opens |
 | 11 | Drop `.fit` on fit-viewer | Track + tags visible; radar coverage ~0 / all 255 |
 
@@ -116,6 +130,11 @@ testing BLE radar).
 | 3 | Keep screen on **on** → Start | Screen stays awake while RUNNING only |
 | 4 | Rides list | Past FITs listed without sharing first |
 | 5 | Delete a ride | Gone from list; file removed |
+| 6 | Appearance → **Light**, then **Dark** | Every screen flips, including the status-bar glyphs; no white or black flash on the way |
+| 7 | Appearance → **Auto**, flip the phone's system theme | App follows |
+| 8 | Force **Light**, kill the app, relaunch on a phone in dark mode | App comes up light (the API 31+ system splash still follows the phone — known, §8.1) |
+| 9 | SURFACE → SAND in each appearance | The lit tile's label and countdown are dark ink, not white |
+| 10 | About → **How Scout works** | Sections render; instance link opens browser |
 
 ### 3.3 Radar (optional hardware)
 
@@ -132,6 +151,28 @@ testing BLE radar).
 | 5 | Viewer on ride file | `radar_*` populated while tracking; coverage & vehicle count sane |
 
 Emulator: GPS fake ok; **do not** rely on emulator for BLE/ANT+.
+
+### 3.4 Getting a ride file off the device
+
+The app writes to app-private storage, so pull it through `run-as`. Redirect from
+`cmd`, not PowerShell — PowerShell's `>` re-encodes and corrupts the binary:
+
+```powershell
+adb emu geo fix 4.895 52.370          # emulator only: give it a fix to record
+adb shell run-as org.cyclingcommons.scout ls -l files/rides
+cmd /c "adb exec-out run-as org.cyclingcommons.scout cat files/rides/<name>.fit > ride.fit"
+node Android/tools/validate-scout-fit.mjs Garmin/tools/fit-viewer.html ride.fit
+```
+
+The record/tag/surface expectations in `validate-scout-fit.mjs` are pinned to the
+synthetic scenario, so on a real ride file only read `CRC ok`, `has records` and
+`dev field names`; check the rest in `fit-viewer.html`.
+
+### 3.5 Screenshots
+
+`tools/shot.ps1 -Name <name>` pulls a screenshot into `Android/build/shots/` and
+writes a downscaled `.small.jpg` next to it; `tools/crop-shot.ps1` zooms a region
+for checking icon and type detail.
 
 ---
 
@@ -171,17 +212,21 @@ Quick hygiene checks (no 2 h needed):
 - [ ] Paused: radar disconnected
 - [ ] Idle: no BLE scan loop (scan only on pair screen)
 - [ ] Keep-screen-on off by default
+- [ ] Idle: no CPU burn. Sit on the ride screen with no ride open and diff
+      `utime + stime` (fields 14–15 of `/proc/<pid>/stat`) over 30 s — expect **0**.
+      Recording with GPS is roughly 50 jiffies per 30 s for comparison.
 
 ---
 
 ## 6. Suggested order before a release
 
 1. `:domain:test :fit:test`
-2. `validate-scout-fit.mjs` on scenario FIT
-3. Device smoke §3.1 + §3.2
-4. Radar §3.3 if hardware available
-5. One outdoor ride §4
-6. Battery §5 when changing radios / GPS / wake behaviour
+2. `validate-scout-fit.mjs` on both scenario FITs
+3. `:app:lintDebug`
+4. Device smoke §3.1 + §3.2
+5. Radar §3.3 if hardware available
+6. One outdoor ride §4
+7. Battery §5 when changing radios / GPS / wake behaviour
 
 ---
 

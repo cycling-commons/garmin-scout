@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Matches Brand/Scout-logo-white.jpg background -->
-    <color name="ic_launcher_background">#E30613</color>
+    <!-- Keep in step with ScoutColorScheme in ui/theme/Theme.kt -->
+    <color name="brand">#F0321C</color>
+    <color name="screen_background_light">#F4F4F1</color>
+    <color name="screen_background_dark">#0B0B0C</color>
+    <color name="screen_background">@color/screen_background_light</color>
+    <color name="ic_launcher_background">@color/brand</color>
 </resources>

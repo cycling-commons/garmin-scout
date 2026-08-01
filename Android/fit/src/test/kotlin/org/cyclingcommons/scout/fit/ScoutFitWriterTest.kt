@@ -1,5 +1,6 @@
 package org.cyclingcommons.scout.fit
 
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -75,11 +76,70 @@ class ScoutFitWriterTest {
         }
     }
 
+    /** Streamed appends + mid-ride flushes must land the same bytes as a one-shot encode. */
+    @Test
+    fun streamedFlushesMatchOneShotEncode() {
+        val samples = buildScenario()
+        val tmp = File.createTempFile("scout-stream-", ".fit")
+        try {
+            val writer = ScoutFitWriter(tmp)
+            samples.forEachIndexed { i, sample ->
+                writer.append(sample)
+                if (i % 7 == 0) writer.flush()
+            }
+            writer.finish()
+            assertEquals(samples.size, writer.recordCount)
+            assertArrayEquals(ScoutFitWriter.encode(samples), tmp.readBytes())
+        } finally {
+            tmp.delete()
+        }
+    }
+
+    /** A flush mid-ride leaves a complete file, so a crash keeps everything logged so far. */
+    @Test
+    fun midRideFlushLeavesValidFile() {
+        val samples = buildScenario()
+        val tmp = File.createTempFile("scout-partial-", ".fit")
+        try {
+            val writer = ScoutFitWriter(tmp)
+            samples.take(20).forEach(writer::append)
+            writer.flush()
+
+            val bytes = tmp.readBytes()
+            assertArrayEquals(ScoutFitWriter.encode(samples.take(20)), bytes)
+            val expectedCrc = FitCrc.crc16(bytes, 0, bytes.size - 2)
+            val fileCrc =
+                (bytes[bytes.size - 2].toInt() and 0xFF) or
+                    ((bytes[bytes.size - 1].toInt() and 0xFF) shl 8)
+            assertEquals(expectedCrc, fileCrc)
+
+            samples.drop(20).forEach(writer::append)
+            writer.finish()
+            assertArrayEquals(ScoutFitWriter.encode(samples), tmp.readBytes())
+        } finally {
+            tmp.delete()
+        }
+    }
+
     @Test
     fun writesScenarioForViewerValidation() {
         val out = File("build/scout-scenario.fit")
         out.parentFile?.mkdirs()
         out.writeBytes(ScoutFitWriter.encode(buildScenario()))
+        assertTrue(out.length() > 100)
+    }
+
+    /** Same scenario through the writer the app actually uses, for the Node validator. */
+    @Test
+    fun writesStreamedScenarioForViewerValidation() {
+        val out = File("build/scout-scenario-streamed.fit")
+        out.parentFile?.mkdirs()
+        val writer = ScoutFitWriter(out)
+        buildScenario().forEachIndexed { i, sample ->
+            writer.append(sample)
+            if (i % 11 == 0) writer.flush()
+        }
+        writer.finish()
         assertTrue(out.length() > 100)
     }
 

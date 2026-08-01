@@ -15,6 +15,9 @@ deltas.
 | --- | --- |
 | **[docs/SPEC.md](docs/SPEC.md)** | Product behaviour: UI, timings, undo, surfaces, radar transport policy |
 | **[docs/DATA-FORMAT.md](docs/DATA-FORMAT.md)** | On-disk channels, codes, parser rules (undo / surfaces / vehicles) |
+| **[docs/SHARING.md](docs/SHARING.md)** | Optional upload to an Atlas (client contract) |
+| **[docs/ATLAS-SERVER.md](docs/ATLAS-SERVER.md)** | What an Atlas backend must implement |
+| **[docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md)** | Help text, instance URL, and fork setup (no Kotlin) |
 
 Platform ports implement these. Do not invent parallel semantics.
 

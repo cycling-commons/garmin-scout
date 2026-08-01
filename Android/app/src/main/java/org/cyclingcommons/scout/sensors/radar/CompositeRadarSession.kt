@@ -3,7 +3,6 @@ package org.cyclingcommons.scout.sensors.radar
 import android.content.Context
 import org.cyclingcommons.scout.domain.RadarLinkState
 import org.cyclingcommons.scout.domain.RadarObservation
-import org.cyclingcommons.scout.ui.RadarDeviceRow
 
 enum class RadarTransport {
     AUTO,

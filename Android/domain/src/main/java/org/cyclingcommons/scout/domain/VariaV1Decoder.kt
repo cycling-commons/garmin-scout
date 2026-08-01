@@ -25,10 +25,14 @@ class VariaV1Decoder(
 
     private val tracks = HashMap<Int, Track>()
 
+    // Notifications arrive on a Bluetooth binder thread while the ride tick reads
+    // snapshots, so every entry point guards the track table.
+    @Synchronized
     fun reset() {
         tracks.clear()
     }
 
+    @Synchronized
     fun feed(payload: ByteArray) {
         val now = nowMs()
         when {
@@ -39,6 +43,7 @@ class VariaV1Decoder(
         pruneStale(now)
     }
 
+    @Synchronized
     fun snapshot(): List<RadarTarget> {
         pruneStale(nowMs())
         return tracks.values

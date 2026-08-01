@@ -20,10 +20,14 @@ class MageneBleDecoder(
 
     private val slots = arrayOfNulls<Track>(8)
 
+    // Notifications arrive on a Bluetooth binder thread while the ride tick reads
+    // snapshots, so every entry point guards the slot table.
+    @Synchronized
     fun reset() {
         slots.fill(null)
     }
 
+    @Synchronized
     fun feed(payload: ByteArray) {
         if (payload.size < 11) return
         if ((payload[0].toInt() and 0xFF) != 0x57) return
@@ -72,6 +76,7 @@ class MageneBleDecoder(
         pruneStale(now)
     }
 
+    @Synchronized
     fun snapshot(): List<RadarTarget> {
         pruneStale(nowMs())
         return slots.mapNotNull { t ->

@@ -156,7 +156,7 @@ class ScoutView extends WatchUi.DataField {
     // Each row is [code as Number, label as String, RGB as Number], laid out
     // left-to-right, top-to-bottom over a COLS-wide grid.
     hidden var _buttons as Array<Array> = [
-        [POI_DANGER,   "DANGER",   0xD1421F],
+        [POI_DANGER,   "BEWARE",   0xD1421F],
         [POI_CLOSURE,  "CLOSURE",  0x8E44AD],
         [POI_SURFACE,  "SURFACE",  0x8E5A2B],
         [UI_RESUPPLY,  "RESUPPLY", 0x1E7FC0],
@@ -635,7 +635,7 @@ class ScoutView extends WatchUi.DataField {
                 dc.drawRectangle(bx + 2, by + 2, cw - 4, ch - 4);
                 dc.setColor(fg, Graphics.COLOR_TRANSPARENT);
             }
-            // On the grid, each tile shows its running tally ("DANGER 3"); the
+            // On the grid, each tile shows its running tally ("BEWARE 3"); the
             // count is dropped once it hits 0 so an untouched tile stays clean.
             var text = label;
             if (_mode == MODE_GRID) {

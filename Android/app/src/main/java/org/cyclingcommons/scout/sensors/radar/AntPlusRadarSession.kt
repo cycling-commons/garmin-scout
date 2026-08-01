@@ -41,7 +41,12 @@ class AntPlusRadarSession(context: Context) {
     private var bound = false
 
     private val stateRef = AtomicReference(RadarLinkState.ABSENT)
+
+    // Written on the ANT event thread, read on the ride tick.
+    @Volatile
     private var pageA: ByteArray? = null
+
+    @Volatile
     private var pageB: ByteArray? = null
     private var lockedDeviceNumber: Int = ChannelId.ANY_DEVICE_NUMBER
 

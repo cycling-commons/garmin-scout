@@ -18,6 +18,13 @@ developer_key
 # Brand / design / store assets (local only; app uses copies under Android/res)
 Brand/
 
+# Instance-specific in-app help (see Android/help/README.md)
+Android/help/help.json
+Android/help/legal.json
+
+# Atlas instance URL for this build (see Android/.env.example)
+Android/.env.dev.local
+
 # Android / Gradle
 Android/.gradle/
 Android/**/build/

@@ -55,7 +55,16 @@ stay in the root docs — do not fork them here. For installing tools, see
 ```
 Android/
   docs/TECHNICAL.md          ← this file
+  .env.example               ← Atlas URL template (instance copy: .env.dev.local, gitignored)
+  help/                      ← in-app help JSON (example committed, instance copy gitignored)
   app/                       ← Compose UI, permissions, location + BLE/ANT+ adapters, settings
+    help/                    ← HelpContent loader
+    instance/                ← InstanceConfig loader (sharing, when implemented)
+    ui/theme/                ← design tokens + MaterialTheme wiring (§8.1)
+    ui/components/           ← shared Scout chrome (page, section, card, button, pill, mark)
+    ui/                      ← one file per screen (intro, ride, settings, pair radar, help)
+    sensors/                 ← LocationSampler + radar/ (transports, coordinator, prefs)
+    recording/               ← foreground service, FIT session, ride files
   domain/                    ← pure Kotlin: codes, queue, undo tallies, radar decode / counters
   fit/                       ← FIT encode/flush (JVM; no Android deps)
   tools/validate-scout-fit.mjs
@@ -65,6 +74,9 @@ Rules:
 
 - `domain/` and `fit/` have **no Android framework imports** — easiest to test and to share later.
 - UI talks to a ride façade (`RideViewModel`), not to BLE/ANT+ directly.
+- `RideViewModel` owns UI state only; radar connect/retry lives in `RadarCoordinator`,
+  haptics/tones in `RideFeedback`, file I/O in `RideFitSession`. Keep it that way —
+  the ViewModel is the file that grows if nobody watches it.
 - Sensor adapters normalize to the SPEC radar model (`TRACKING` + targets[]).
 - Location + BLE/ANT+ live under `app/.../sensors` (recording/FGS under `app/.../recording`).
 - BLE Varia-family: service `6a4e3200`, V1 notify `6a4e3203` (community protocol). V2/`6a4e3204` later if needed.
@@ -108,7 +120,8 @@ Rules:
 | Recording PAUSED | Off or passive | Disconnect / no scan | Flush; no samples | Service may stay for “ride open” but radios down |
 | Recording STOPPED | Off | Off | Final flush + close file | Tear down service |
 
-Taps while paused/stopped may animate in UI but **must not** enqueue tags into the file (SPEC).
+Taps while paused/stopped must not enqueue tags into the file (SPEC §4.1) and
+must not flash tiles or open pickers — the UI shows “Start recording first”.
 
 ---
 
@@ -131,7 +144,7 @@ Taps while paused/stopped may animate in UI but **must not** enqueue tags into t
 - Request location interval ~1000 ms, min update distance 0 while RUNNING (Cadence matters more than distance for Scout channels).
 - On PAUSED: `removeLocationUpdates` immediately; close radar GATT / release ANT+ channel.
 - Avoid perpetual `PARTIAL_WAKE_LOCK`; rely on foreground service + location callbacks. If a wake lock is unavoidable, hold only while RUNNING.
-- Dark-friendly UI; do not force max brightness.
+- Do not force max brightness. Dark is the cheaper appearance on OLED, but it is the rider's setting, not ours to impose (§8.1).
 
 ### Measure
 
@@ -150,7 +163,30 @@ Treat large idle / paused regressions as bugs. Field log template:
 | Recording, no radar | 2 h | | | |
 | Recording + radar | 2 h | | | transport: ANT+ / BLE |
 
-P4 battery hygiene shipped: GPS-only while RUNNING; radar connect only while RUNNING (or pair screen); disconnect on pause/stop; no BLE scan during ride; FIT flush on pause/stop + every 30 records.
+### Shipped
+
+P4 battery hygiene: GPS-only while RUNNING; radar connect only while RUNNING (or pair screen); disconnect on pause/stop; no BLE scan during ride; FIT flush on pause/stop + every 30 records.
+
+P6 battery pass — the app should cost nothing while nothing is happening:
+
+| Was | Now | Why it matters |
+| --- | --- | --- |
+| ViewModel loop ticked every 250 ms forever | Demand-driven loop: suspends on a conflated wake channel when idle, 1 Hz while recording, 250 ms **only** while a picker/undo countdown is on screen, and never while the UI is not visible | A phone parked in a jersey pocket for a 4 h ride was doing ~57 k wakeups for nothing |
+| Permission / Bluetooth / ANT probes on every tick | Probed on lifecycle events and cached | Each probe was a binder round-trip, 4×/s |
+| `ScoutFitWriter` re-encoded and rewrote the whole file on every flush | Streaming append to a `RandomAccessFile`; only the header, new bytes and trailing CRC are written | Cost was O(n²) bytes: a 3 h ride pushed ~200 kB of samples through ~40 MB of rewrites, plus a full re-encode of every record each time |
+| FIT writes on the main thread | `RideFitSession` is a channel-backed actor on `Dispatchers.IO` | Keeps taps responsive and lets the writer batch |
+| Fixed-interval radar reconnect | Exponential backoff (2 s → 60 s), reset on a successful connect | Failed reconnects were hammering the radio |
+| Ride history listed by the composable | Listed once on `Dispatchers.IO` when Settings opens | No disk walk per recomposition |
+| `FLAG_KEEP_SCREEN_ON` tied to the setting | Held only when the setting is on **and** the timer is RUNNING | Paused rides let the screen sleep |
+
+Measured on an API 37 emulator by sampling `utime + stime` from `/proc/<pid>/stat`:
+**0 jiffies over 30 s** sitting on the ride screen with no ride open, and 54 jiffies
+(0.54 s CPU) over 30 s while recording with GPS. Idle really is idle; if that first
+number is ever non-zero again, something started polling.
+
+Keep the rule when adding features: **nothing may poll.** If something needs the
+loop to run, call `wake()`; if it needs a fixed cadence, add it to
+`nextTickDelayMs` so the cost is visible in one place.
 
 ---
 
@@ -194,15 +230,102 @@ Same corroboration rule as SPEC / Garmin `writeRadar` (pending rise, presence ch
 
 ---
 
-## 8. Tagging UI
+## 8. UI
+
+### 8.1 Design system
+
+Every screen is built from tokens in `ui/theme/Theme.kt` and chrome in
+`ui/components/ScoutUi.kt`. No screen hard-codes a colour, a text size or a
+padding — if a value is missing, add a token rather than a literal.
+
+| Token set | Holds |
+| --- | --- |
+| `ScoutColors` | The active `ScoutColorScheme`: screen/surface/outline, brand, text, radar states |
+| `ScoutSpacing` | `xs`…`xxl` step scale used for every padding and gap |
+| `ScoutDimens` | Corner radii, stroke widths, tile heights, brand-mark sizes |
+| `ScoutType` | Named roles (display, tile label, metric, pill, body) over the two brand faces |
+
+- **Type:** Barlow Condensed (semibold/bold) for numerals, tile labels and
+  anything glanceable at arm's length; Quicksand (medium/bold) for prose and
+  buttons. Both ship as bundled `res/font` assets — no downloadable fonts, no
+  network on first run.
+- **Light and dark, rider's choice.** Neither is right for a bar mount all day.
+  Under direct sun a dark field has too little emitted light to beat the ambient
+  and the screen becomes a mirror, so light reads better; at dusk and on OLED,
+  dark is easier on the eyes and cheaper to hold (SPEC §12.1). `ScoutColors` is a
+  `CompositionLocal` over two `ScoutColorScheme` values and `AppPrefs.themeMode`
+  picks one — default `SYSTEM`. Three consequences worth knowing:
+  - `ScoutColors` is a `@Composable` getter, so palette reads only work inside
+    composition. Nothing outside the UI layer may read it.
+  - Status/navigation glyphs are inverted from composition
+    (`MainActivity.SystemBarIcons`); the bars themselves stay transparent.
+  - `windowBackground` can only follow the *system* night mode, so
+    `MainActivity.paintColdStart` repaints it when the rider has overridden the
+    appearance. `@color/screen_background_*` must track `ScoutColorScheme.Screen`.
+    This covers the cold-start frame up to API 30; from API 31 the system splash
+    window is created before `onCreate` and still takes the system's night mode,
+    so an overriding rider gets a brief splash in the other colour. Living with
+    that beats pulling in the splash-screen library for one frame.
+- **Shared chrome:** `ScoutPage` (title + back + scroll), `ScoutSection`,
+  `ScoutCard`, `ScoutButton` (filled/tonal/outline/danger), `ScoutToggleRow` and
+  `StatusPill` (GPS, radar, recording). Screens compose these; they do not
+  restyle Material.
+- **Controls must survive both palettes.** Material's default off-state switch
+  track and chip border are `surfaceVariant`/`outline`, which on a Scout card are
+  indistinguishable from the card itself. Anything interactive gets
+  `ScoutColors.OutlineStrong` and, where the state matters, a word next to it —
+  never colour alone.
+- **Brand mark:** `ic_scout_logo.xml` is the full red-disc logo (launcher + in-app
+  lockup via `ScoutLogo`); `ic_scout_mark.xml` is the tintable pin-and-ripple;
+  `ic_scout_notification.xml` is the flat pin silhouette for the status bar.
+- **Strings:** all user-facing copy lives in `res/values/strings.xml`. Composables
+  use `stringResource` — that is also the hook for a future translation.
+
+### 8.2 Tagging UI
 
 - Full-screen (immersive enough for bar mount): 2-column grid + bottom radar strip + recording dot.
 - Timings exact to SPEC §6 (`PICK_MS` 12s, `CORRECT_MS` 3s, undo 3s/6s, queue ≥ 16).
-- Colours and labels per SPEC (English v1).
+- Colours and labels per SPEC (English v1). The hues are normative and identical
+  in both appearances; only the treatment moves. Unlit is the hue washed over the
+  page at `tileIdleAlpha` and labelled in page ink, lit is the hue itself labelled
+  in white — except where the hue's luminance passes `PALE_TILE_LUMINANCE`, at
+  which point white drops under 3:1 (SAND, FOOD) and the label flips to dark ink.
 - Haptic via `HapticFeedback` / `Vibrator` when enabled; distinct pattern for undo; never block tagging if haptic fails.
 - Hit-testing: strip taps resolve to the tile above (SPEC).
 
-Do not add menus that steal focus mid-ride beyond the in-field pickers.
+- **Stop confirm:** ending a ride requires an explicit second tap in a dialog
+  (SPEC §9).
+- **Idle tiles:** taps while idle/paused show a snackbar only; domain controller
+  ignores them (SPEC §4.1).
+
+### 8.3 Help page
+
+Rider-facing help is **not** hard-coded. `help/help.example.json` is the
+committed template; each instance keeps its own `help/help.json` (gitignored —
+see root `.gitignore`). The `prepareHelpContent` Gradle task bundles whichever
+exists into `assets/help.json` before every build.
+
+Forks change instance name, URLs and the optional sharing section without
+touching Kotlin. Settings → **How Scout works** opens `HelpScreen`, which renders
+the JSON sections and opens any `links` in the system browser.
+
+Schema and setup: `help/README.md`.
+
+### 8.4 Atlas instance (sharing)
+
+When sharing is implemented, the client talks to exactly one Atlas instance per
+build. Configuration mirrors help (§8.3):
+
+- `Android/.env.example` — committed template (`SCOUT_INSTANCE_URL`,
+  `SCOUT_INSTANCE_NAME`)
+- `Android/.env.dev.local` — gitignored override for this fork
+- `prepareInstanceConfig` writes `assets/instance.json` before every build
+- `InstanceConfigLoader` reads it; OAuth/upload endpoints still come from
+  `/.well-known/scout-upload.json` at runtime (SHARING §4)
+
+Recording does not need a network or this file. Sharing UI will use
+`instance_name` for labels only — the URL is never shown to the rider unless
+they follow a link returned after upload.
 
 ---
 
@@ -254,6 +377,7 @@ Privacy copy: local recording only; no account; radar optional; no ads / analyti
 | **P3** | BLE radar pair + TRACKING samples + strip | Done |
 | **P4** | ANT+ path when hardware present; battery pass (measure §5) | Done |
 | **P5** | Settings (units, keep-screen-on, preferred radar), export/share polish | Done |
+| **P6** | Battery pass §5 “Shipped”, design system §8.1, screen rework | Done |
 
 Ship gating: P2 is already useful without radar; P3–P4 match Garmin’s optional radar story; P5 finishes v1 UX.
 
@@ -274,8 +398,11 @@ Full plan: **[TESTING.md](TESTING.md)** (unit, FIT viewer, device smoke, field r
 
 ## 13. Out of scope / later
 
+See **[ROADMAP.md](ROADMAP.md)** for tracked ideas (e.g. recover interrupted ride
+on relaunch). Summary:
+
 - Extract `domain/` + `fit/` to KMP for a future iOS SwiftUI UI.
-- In-app Atlas upload.
+- In-app Atlas upload ([SHARING.md](../../docs/SHARING.md)).
 - Open-surface strip indicator (root ROADMAP idea).
 - Karoo-specific packaging (separate platform folder).
 

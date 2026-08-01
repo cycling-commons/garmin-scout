@@ -1,0 +1,69 @@
+{
+  "title": "How Scout works",
+  "sections": [
+    {
+      "heading": "Recording",
+      "body": [
+        "Tap Start when you set off. Scout writes a FIT file on this device — no account needed.",
+        "Pause stops GPS and radar to save battery. Stop finishes the file and saves it under Settings."
+      ]
+    },
+    {
+      "heading": "Tagging",
+      "body": [
+        "Tap a tile to stamp hazards, closures, surfaces and resupply onto your GPS track.",
+        "Tap the same tile again within a few seconds to undo.",
+        "Surface mode keeps tagging until you tap END on the banner or the END tile."
+      ]
+    },
+    {
+      "heading": "Radar (optional)",
+      "body": [
+        "Pair a rear radar under Settings. It connects when you Start and disconnects on Pause or Stop.",
+        "Overtakes are stored in the FIT file like everything else. Nothing is uploaded automatically."
+      ]
+    },
+    {
+      "heading": "Your ride file",
+      "body": [
+        "Finished rides stay on this device until you delete them. Share the FIT to any app.",
+        "Scout never phones home."
+      ]
+    },
+    {
+      "heading": "Permissions",
+      "body": [
+        "Location (precise): records your GPS track and where each tag lands.",
+        "Notifications: the ongoing ride indicator while a session is open.",
+        "Nearby devices: only for pairing a BLE radar — tagging works without it.",
+        "Change these anytime in Android Settings → Apps → Scout → Permissions."
+      ]
+    },
+    {
+      "heading": "Sharing (optional)",
+      "body": [
+        "This build can send a finished ride to your Atlas instance as a private draft.",
+        "Preview it on the web before you submit it for curation. The app cannot publish for you.",
+        "Copy help/help.example.json to help/help.json and edit this section for your instance."
+      ],
+      "links": [
+        {
+          "label": "Your Atlas",
+          "url": "https://example.com"
+        }
+      ]
+    },
+    {
+      "heading": "Source code",
+      "body": [
+        "Scout is open source (MIT). Point this link at your fork's repository."
+      ],
+      "links": [
+        {
+          "label": "GitHub",
+          "url": "https://github.com/your-org/scout"
+        }
+      ]
+    }
+  ]
+}

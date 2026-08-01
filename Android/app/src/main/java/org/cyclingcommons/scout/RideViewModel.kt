@@ -2,23 +2,19 @@ package org.cyclingcommons.scout
 
 import android.app.Application
 import android.content.Intent
-import android.media.AudioManager
-import android.media.ToneGenerator
-import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import org.cyclingcommons.scout.domain.RadarLinkState
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.cyclingcommons.scout.domain.ScoutController
 import org.cyclingcommons.scout.domain.ScoutUiState
 import org.cyclingcommons.scout.domain.TimerState
@@ -27,250 +23,175 @@ import org.cyclingcommons.scout.recording.RideFile
 import org.cyclingcommons.scout.recording.RideFiles
 import org.cyclingcommons.scout.recording.RideFitSession
 import org.cyclingcommons.scout.recording.RideForegroundService
+import org.cyclingcommons.scout.R
 import org.cyclingcommons.scout.sensors.LocationSampler
-import org.cyclingcommons.scout.sensors.radar.CompositeRadarSession
-import org.cyclingcommons.scout.sensors.radar.RadarPrefs
+import org.cyclingcommons.scout.sensors.radar.RadarCoordinator
+import org.cyclingcommons.scout.sensors.radar.RadarDeviceRow
+import org.cyclingcommons.scout.sensors.radar.RadarStatus
 import org.cyclingcommons.scout.sensors.radar.RadarTransport
-import org.cyclingcommons.scout.ui.RadarDeviceRow
+import org.cyclingcommons.scout.ui.theme.ThemeMode
 import java.io.File
+import kotlin.math.roundToInt
+
+enum class Screen {
+    INTRO,
+    RIDE,
+    SETTINGS,
+    HELP,
+    PAIR_RADAR,
+}
 
 data class RideUiModel(
+    val screen: Screen = Screen.RIDE,
     val scout: ScoutUiState = ScoutUiState(),
+    val elapsedSec: Long = 0L,
     val sampleCount: Long = 0L,
     val pendingTags: Int = 0,
     val hasLocationPermission: Boolean = false,
+    /** Formatted last fix, or null while GPS has nothing yet. */
+    val fixLabel: String? = null,
     val lastFitPath: String? = null,
-    val lastFixLabel: String = "no fix",
-    val showPairRadar: Boolean = false,
-    val showSettings: Boolean = false,
-    val showIntro: Boolean = true,
-    val radarState: RadarLinkState = RadarLinkState.ABSENT,
-    val radarDevices: List<RadarDeviceRow> = emptyList(),
-    val bondedRadarName: String? = null,
-    val bondedRadarAddress: String? = null,
-    val bluetoothOk: Boolean = false,
-    val bluetoothPermissionOk: Boolean = false,
-    val antAvailable: Boolean = false,
-    val transport: RadarTransport = RadarTransport.AUTO,
-    val antDeviceNumber: Int? = null,
+    val radar: RadarStatus = RadarStatus(),
     val imperial: Boolean = false,
     val keepScreenOn: Boolean = false,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val rides: List<RideFile> = emptyList(),
-    /** True while Start/Resume is still trying to reach a saved radar. */
-    val radarSeeking: Boolean = false,
+    /** Transient rider hint (e.g. tapped a tile before recording). */
+    val userMessage: String? = null,
 )
 
+/**
+ * Ride façade for the UI (TECHNICAL §4). Holds no radio logic of its own: the tagging
+ * rules live in [ScoutController], the radar link in [RadarCoordinator], the file in
+ * [RideFitSession].
+ *
+ * The tick loop is demand-driven — it samples at ~1 Hz while RUNNING, drops to 250 ms
+ * only while a picker or lit tile is on screen, and suspends outright when the app is
+ * idle so a backgrounded Scout costs nothing (SPEC §12.1).
+ */
 class RideViewModel(app: Application) : AndroidViewModel(app) {
     private val controller = ScoutController()
     private val vehicles = VehicleCounter()
     private val location = LocationSampler(app)
-    private val radar = CompositeRadarSession(app)
-    private val radarPrefs = RadarPrefs(app)
+    private val radar = RadarCoordinator(app)
     private val appPrefs = AppPrefs(app)
+    private val feedback = RideFeedback(app)
 
     private var fitSession: RideFitSession? = null
-    private val foundDevices = LinkedHashMap<String, RadarDeviceRow>()
 
-    private val _ui = MutableStateFlow(RideUiModel())
+    private val _ui = MutableStateFlow(
+        RideUiModel(screen = if (appPrefs.introSeen) Screen.RIDE else Screen.INTRO),
+    )
     val ui: StateFlow<RideUiModel> = _ui.asStateFlow()
 
+    /** Signals the tick loop to run again; conflated because one wake is enough. */
+    private val wakeSignal = Channel<Unit>(Channel.CONFLATED)
+
+    private var uiVisible = false
     private var lastSampleAt = 0L
-    private var lastRadarRetryAt = 0L
-    /** Wall-clock deadline for first-connect seek; 0 = not seeking / gave up. */
-    private var radarSeekUntilMs = 0L
-    /** Once true this ride, keep retrying drops for the rest of the recording. */
-    private var radarHadTracking = false
+    private var sampleCount = 0L
+    private var rideStartedAtMs = 0L
+    private var elapsedBeforePauseMs = 0L
 
     init {
-        radar.onBleDeviceFound = { row ->
-            val remembered = radarPrefs.rememberedName(row.address)
-            val withName = if (row.name.isNullOrBlank() && remembered != null) {
-                row.copy(name = remembered, likelyRadar = true)
-            } else {
-                row
-            }
-            val prev = foundDevices[withName.address]
-            val merged =
-                if (prev == null) {
-                    withName
-                } else {
-                    withName.copy(
-                        name = withName.name?.takeIf { it.isNotBlank() } ?: prev.name,
-                        rssi = maxOf(withName.rssi, prev.rssi),
-                        likelyRadar = withName.likelyRadar || prev.likelyRadar,
-                    )
-                }
-            foundDevices[merged.address] = merged
-            publishDeviceList()
-        }
-        radar.ble.onNameResolved = { address, name ->
-            radarPrefs.rememberName(address, name)
-            if (radarPrefs.address.equals(address, ignoreCase = true)) {
-                radarPrefs.name = name
-            }
-            val prev = foundDevices[address]
-            foundDevices[address] = (prev ?: RadarDeviceRow(address, name)).copy(
-                name = name,
-                likelyRadar = true,
-            )
-            _ui.update {
-                it.copy(
-                    bondedRadarName = if (it.bondedRadarAddress.equals(address, true)) {
-                        name
-                    } else {
-                        it.bondedRadarName
-                    },
-                )
-            }
-            publishDeviceList()
-        }
-        radar.onAntDeviceFound = { num ->
-            _ui.update {
-                it.copy(
-                    antDeviceNumber = num,
-                    bondedRadarName = "ANT+ radar #$num",
-                    bondedRadarAddress = "ANT+$num",
-                )
-            }
-        }
-        radar.onStateChanged = { st ->
-            if (st == RadarLinkState.TRACKING) {
-                radarHadTracking = true
-            }
-            _ui.update {
-                it.copy(
-                    radarState = st,
-                    radarSeeking = isRadarSeeking(System.currentTimeMillis()),
-                    scout = mergeRadar(it.scout),
-                )
-            }
-        }
+        radar.onStatusChanged = ::wake
         viewModelScope.launch {
             while (isActive) {
                 val now = System.currentTimeMillis()
-                if (controller.onTick(now)) {
-                    // Picker commit / timeout — same confirm/undo feedback as a tap.
-                    controller.takeFeedback()?.let { confirmTap(it.undone) }
+                tick(now)
+                val delayMs = nextTickDelayMs(now)
+                if (delayMs == null) {
+                    wakeSignal.receive()
+                } else {
+                    withTimeoutOrNull(delayMs) { wakeSignal.receive() }
                 }
-                if (controller.timer == TimerState.RUNNING && now - lastSampleAt >= 1000L) {
-                    lastSampleAt = now
-                    writeSample(now)
-                    maybeRetryRadar(now)
-                }
-                publish(now)
-                delay(250)
             }
         }
         refreshPermissions()
     }
 
-    private fun beginRadarSeek(nowMs: Long = System.currentTimeMillis()) {
-        radarHadTracking = false
-        radarSeekUntilMs = nowMs + RADAR_SEEK_MS
-        lastRadarRetryAt = 0L
+    private fun tick(nowMs: Long) {
+        if (controller.onTick(nowMs)) {
+            // Picker commit / timeout — same confirm/undo feedback as a tap.
+            controller.takeFeedback()?.let { feedback.confirm(it.undone) }
+        }
+        if (controller.timer == TimerState.RUNNING && nowMs - lastSampleAt >= SAMPLE_INTERVAL_MS) {
+            lastSampleAt = nowMs
+            writeSample(nowMs)
+            radar.onTick(nowMs)
+        }
+        publish(nowMs)
     }
 
-    private fun clearRadarSeek() {
-        radarSeekUntilMs = 0L
-        radarHadTracking = false
+    /** Null = nothing pending; park the loop until something wakes it. */
+    private fun nextTickDelayMs(nowMs: Long): Long? {
+        val animating = uiVisible && controller.needsTick(nowMs)
+        if (controller.timer != TimerState.RUNNING) {
+            return if (animating) ANIMATION_INTERVAL_MS else null
+        }
+        if (animating) return ANIMATION_INTERVAL_MS
+        return (SAMPLE_INTERVAL_MS - (nowMs - lastSampleAt)).coerceIn(1L, SAMPLE_INTERVAL_MS)
     }
 
-    private fun isRadarSeeking(nowMs: Long): Boolean {
-        if (controller.timer != TimerState.RUNNING) return false
-        if (radarPrefs.address == null && radarPrefs.antDeviceNumber == null) return false
-        if (radar.state() == RadarLinkState.TRACKING) return false
-        if (radarHadTracking) return true
-        return radarSeekUntilMs > 0L && nowMs < radarSeekUntilMs
+    private fun wake() {
+        wakeSignal.trySend(Unit)
     }
 
-    private fun maybeRetryRadar(nowMs: Long) {
-        val hasSaved =
-            radarPrefs.address != null || radarPrefs.antDeviceNumber != null
-        if (!hasSaved) return
-        val st = radar.state()
-        if (st == RadarLinkState.TRACKING) {
-            radarHadTracking = true
-            return
-        }
-        if (st == RadarLinkState.CONNECTING || st == RadarLinkState.SCANNING) {
-            // Single in-flight attempt; BleRadarSession times out CONNECTING.
-            if (!radarHadTracking &&
-                radarSeekUntilMs > 0L &&
-                nowMs >= radarSeekUntilMs
-            ) {
-                radar.disconnect()
-                radarSeekUntilMs = 0L
-            }
-            return
-        }
-        val mayRetry = radarHadTracking ||
-            (radarSeekUntilMs > 0L && nowMs < radarSeekUntilMs)
-        if (!mayRetry) {
-            if (radarSeekUntilMs > 0L && nowMs >= radarSeekUntilMs) {
-                radar.disconnect()
-                radarSeekUntilMs = 0L
-            }
-            return
-        }
-        if (nowMs - lastRadarRetryAt < RADAR_RETRY_GAP_MS) return
-        if (st == RadarLinkState.DISCONNECTED || st == RadarLinkState.ABSENT) {
-            lastRadarRetryAt = nowMs
-            radar.connectForRide()
-        }
-    }
-
-    private fun publishDeviceList() {
-        _ui.update {
-            it.copy(
-                radarDevices = foundDevices.values.sortedWith(
-                    compareByDescending<RadarDeviceRow> { d -> d.likelyRadar }
-                        .thenByDescending { d -> d.rssi }
-                        .thenBy { d -> d.name ?: "~" },
-                ),
-            )
-        }
+    /** Driven by the activity lifecycle: while hidden, only recording keeps ticking. */
+    fun setUiVisible(visible: Boolean) {
+        uiVisible = visible
+        if (visible) wake()
     }
 
     fun refreshPermissions() {
+        radar.refreshCapabilities()
         _ui.update {
             it.copy(
                 hasLocationPermission = location.hasPermission(),
-                bluetoothPermissionOk = radar.ble.hasBluetoothPermission(),
-                bluetoothOk = radar.ble.bluetoothEnabled(),
-                antAvailable = radar.antAvailable(),
-                transport = radarPrefs.transport,
-                bondedRadarName = radarPrefs.name,
-                bondedRadarAddress = radarPrefs.address
-                    ?: radarPrefs.antDeviceNumber?.let { "ANT+$it" },
-                antDeviceNumber = radarPrefs.antDeviceNumber,
-                radarState = radar.state(),
-                lastFixLabel = fixLabel(),
+                radar = radar.status.value,
                 imperial = appPrefs.imperial,
                 keepScreenOn = appPrefs.keepScreenOn,
-                rides = RideFiles.list(getApplication()),
+                themeMode = appPrefs.themeMode,
             )
         }
     }
 
     fun dismissIntro() {
-        _ui.update { it.copy(showIntro = false) }
+        appPrefs.introSeen = true
+        show(Screen.RIDE)
+    }
+
+    fun replayIntro() {
+        appPrefs.introSeen = false
+        show(Screen.INTRO)
     }
 
     fun openSettings() {
-        _ui.update {
-            it.copy(
-                showSettings = true,
-                showPairRadar = false,
-                rides = RideFiles.list(getApplication()),
-                imperial = appPrefs.imperial,
-                keepScreenOn = appPrefs.keepScreenOn,
-            )
-        }
+        show(Screen.SETTINGS)
         refreshPermissions()
+        loadRides()
     }
 
-    fun closeSettings() {
-        _ui.update { it.copy(showSettings = false) }
+    fun closeSettings() = show(Screen.RIDE)
+
+    fun openHelp(returnTo: Screen = Screen.SETTINGS) {
+        helpReturnScreen = returnTo
+        show(Screen.HELP)
+    }
+
+    fun closeHelp() = show(helpReturnScreen)
+
+    private var helpReturnScreen = Screen.SETTINGS
+
+    fun openPairRadar() {
+        radar.openPairing()
+        show(Screen.PAIR_RADAR)
+    }
+
+    fun closePairRadar() {
+        radar.closePairing(rideIdle = controller.timer == TimerState.IDLE)
+        show(Screen.SETTINGS)
+        loadRides()
     }
 
     fun setImperial(value: Boolean) {
@@ -283,91 +204,43 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(keepScreenOn = value) }
     }
 
-    fun openPairRadar() {
-        foundDevices.clear()
-        _ui.update {
-            it.copy(
-                showPairRadar = true,
-                showSettings = false,
-                radarDevices = emptyList(),
-            )
-        }
-        refreshPermissions()
+    fun setThemeMode(value: ThemeMode) {
+        appPrefs.themeMode = value
+        _ui.update { it.copy(themeMode = value) }
     }
 
-    fun closePairRadar() {
-        radar.stopBleScan()
-        if (controller.timer == TimerState.IDLE) {
-            radar.disconnect()
-        }
-        _ui.update {
-            it.copy(
-                showPairRadar = false,
-                showSettings = true, // return to settings after pair
-                rides = RideFiles.list(getApplication()),
-            )
-        }
-    }
+    fun setTransport(transport: RadarTransport) = radar.setTransport(transport)
 
-    fun setTransport(t: RadarTransport) {
-        radar.setTransportPreference(t)
-        refreshPermissions()
-    }
+    fun startRadarScan() = radar.startScan()
 
-    fun startRadarScan() {
-        foundDevices.clear()
-        _ui.update { it.copy(radarDevices = emptyList()) }
-        radar.startBleScan()
-        refreshPermissions()
-    }
+    fun stopRadarScan() = radar.stopScan()
 
-    fun stopRadarScan() {
-        radar.stopBleScan()
-        refreshPermissions()
-    }
+    fun startAntSearch() = radar.startAntSearch()
 
-    fun startAntSearch() {
-        radar.startAntSearch()
-        refreshPermissions()
-    }
+    fun selectRadar(row: RadarDeviceRow) = radar.select(row)
 
-    fun selectRadar(row: RadarDeviceRow) {
-        radar.selectBle(row)
-        refreshPermissions()
-    }
-
-    fun forgetRadar() {
-        radar.forget()
-        _ui.update {
-            it.copy(
-                bondedRadarAddress = null,
-                bondedRadarName = null,
-                antDeviceNumber = null,
-                radarState = RadarLinkState.ABSENT,
-            )
-        }
-    }
+    fun forgetRadar() = radar.forget()
 
     fun startRide() {
-        val app = getApplication<Application>()
         controller.start()
         vehicles.resetRide()
         lastSampleAt = 0L
-        fitSession = RideFitSession(app)
-        if (location.hasPermission()) {
-            location.start()
-        }
-        beginRadarSeek()
-        radar.connectForRide()
-        RideForegroundService.sync(app, TimerState.RUNNING)
+        sampleCount = 0L
+        rideStartedAtMs = System.currentTimeMillis()
+        elapsedBeforePauseMs = 0L
+        fitSession = RideFitSession(getApplication(), viewModelScope)
+        if (location.hasPermission()) location.start()
+        radar.onRideStart()
+        RideForegroundService.sync(getApplication(), TimerState.RUNNING)
         publish()
+        wake()
     }
 
     fun pauseRide() {
         controller.pause()
+        elapsedBeforePauseMs += System.currentTimeMillis() - rideStartedAtMs
         location.stop()
-        radar.disconnect()
-        clearRadarSeek()
+        radar.onRideStop()
         fitSession?.flush()
         RideForegroundService.sync(getApplication(), TimerState.PAUSED)
         publish()
@@ -375,60 +248,159 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
 
     fun resumeRide() {
         controller.resume()
-        if (location.hasPermission()) {
-            location.start()
-        }
-        beginRadarSeek()
-        radar.connectForRide()
+        rideStartedAtMs = System.currentTimeMillis()
+        if (location.hasPermission()) location.start()
+        radar.onRideStart()
         RideForegroundService.sync(getApplication(), TimerState.RUNNING)
         publish()
+        wake()
     }
 
     fun stopRide() {
         controller.stop()
         vehicles.resetRide()
         location.stop()
-        radar.disconnect()
-        clearRadarSeek()
-        val finished = fitSession?.takeIf { it.recordCount > 0 }?.finish()
+        radar.onRideStop()
+        elapsedBeforePauseMs = 0L
+        sampleCount = 0L
+        fitSession?.finish { saved ->
+            _ui.update { it.copy(lastFitPath = saved?.absolutePath) }
+            loadRides()
+        }
         fitSession = null
         RideForegroundService.sync(getApplication(), TimerState.IDLE)
-        _ui.update {
-            it.copy(
-                scout = mergeRadar(controller.snapshot()),
-                sampleCount = 0,
-                pendingTags = 0,
-                hasLocationPermission = location.hasPermission(),
-                lastFitPath = finished?.absolutePath,
-                lastFixLabel = "no fix",
-                radarState = radar.state(),
-                radarSeeking = false,
-                bondedRadarName = radarPrefs.name,
-                bondedRadarAddress = radarPrefs.address
-                    ?: radarPrefs.antDeviceNumber?.let { n -> "ANT+$n" },
-                antDeviceNumber = radarPrefs.antDeviceNumber,
-                antAvailable = radar.antAvailable(),
-                transport = radarPrefs.transport,
-                imperial = appPrefs.imperial,
-                keepScreenOn = appPrefs.keepScreenOn,
-                rides = RideFiles.list(getApplication()),
-            )
-        }
+        _ui.update { it.copy(fixLabel = null) }
+        publish()
     }
 
-    fun shareLastFit(): Intent? =
-        _ui.value.lastFitPath?.let { shareFitPath(it) }
+    fun onTileTap(index: Int) {
+        if (controller.timer != TimerState.RUNNING) {
+            val res = when (controller.timer) {
+                TimerState.PAUSED -> R.string.ride_resume_to_tag
+                else -> R.string.ride_start_to_tag
+            }
+            showUserMessage(getApplication<Application>().getString(res))
+            return
+        }
+        val now = System.currentTimeMillis()
+        controller.onTileTap(index, now)
+        controller.takeFeedback()?.let { feedback.confirm(it.undone) }
+        publish(now)
+        wake()
+    }
+
+    fun clearUserMessage() {
+        _ui.update { it.copy(userMessage = null) }
+    }
+
+    private fun showUserMessage(message: String) {
+        _ui.update { it.copy(userMessage = message) }
+    }
+
+    fun endOpenSurface() {
+        if (controller.timer != TimerState.RUNNING) {
+            val res = when (controller.timer) {
+                TimerState.PAUSED -> R.string.ride_resume_to_tag
+                else -> R.string.ride_start_to_tag
+            }
+            showUserMessage(getApplication<Application>().getString(res))
+            return
+        }
+        val now = System.currentTimeMillis()
+        controller.endOpenSurface(now)
+        controller.takeFeedback()?.let { feedback.confirm(it.undone) }
+        publish(now)
+        wake()
+    }
+
+    fun shareLastFit(): Intent? = _ui.value.lastFitPath?.let { shareFitPath(it) }
 
     fun shareRide(ride: RideFile): Intent? = shareFitPath(ride.file.absolutePath)
 
     fun deleteRide(ride: RideFile) {
         val path = ride.file.absolutePath
-        RideFiles.delete(ride)
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { RideFiles.delete(ride) }
+            _ui.update {
+                it.copy(lastFitPath = it.lastFitPath?.takeIf { p -> p != path })
+            }
+            loadRides()
+        }
+    }
+
+    private fun show(screen: Screen) {
+        _ui.update { it.copy(screen = screen) }
+    }
+
+    private fun loadRides() {
+        viewModelScope.launch {
+            val rides = withContext(Dispatchers.IO) { RideFiles.list(getApplication()) }
+            _ui.update { it.copy(rides = rides) }
+        }
+    }
+
+    private fun writeSample(nowMs: Long) {
+        val tag = controller.drainTag()
+        val fix = location.latest
+        val observation = radar.observation()
+        val channels = observation.fitChannels()
+        val riderKph = fix?.speedMps?.let { (it * KPH_PER_MPS).toInt() } ?: 0
+        vehicles.onSample(
+            tracking = observation.tracking,
+            occupiedCount = observation.occupiedCount(),
+            nearestClosingKph = observation.nearestClosingKph(),
+            riderKph = riderKph,
+        )
+        fitSession?.appendSample(
+            nowMs = nowMs,
+            fix = fix,
+            poiType = tag?.type ?: 0,
+            poiDetail = tag?.detail ?: 0,
+            radarCount = channels[0],
+            radarNear = channels[1],
+            radarSpeed = channels[2],
+        )
+        sampleCount++
+    }
+
+    private fun publish(nowMs: Long = System.currentTimeMillis()) {
+        val timer = controller.timer
+        val elapsedMs = when (timer) {
+            TimerState.IDLE -> 0L
+            TimerState.PAUSED -> elapsedBeforePauseMs
+            TimerState.RUNNING -> elapsedBeforePauseMs + (nowMs - rideStartedAtMs)
+        }
         _ui.update {
             it.copy(
-                rides = RideFiles.list(getApplication()),
-                lastFitPath = if (it.lastFitPath == path) null else it.lastFitPath,
+                scout = withRadar(controller.snapshot(nowMs)),
+                elapsedSec = elapsedMs / 1000L,
+                sampleCount = sampleCount,
+                pendingTags = controller.queueSize(),
+                fixLabel = if (timer == TimerState.IDLE) it.fixLabel else fixLabel(),
+                radar = radar.status.value,
             )
+        }
+    }
+
+    private fun withRadar(base: ScoutUiState): ScoutUiState = base.copy(
+        radarLive = radar.status.value.tracking,
+        carCount = vehicles.carCount,
+        lastCarSpeedKph = vehicles.lastCarSpeedKph,
+        imperial = appPrefs.imperial,
+    )
+
+    /**
+     * A rider cannot do anything with raw coordinates at 30 km/h; what they need to know
+     * is whether the tag they just dropped will land in the right place.
+     */
+    private fun fixLabel(): String? {
+        val fix = location.latest ?: return null
+        val app = getApplication<Application>()
+        val accuracy = fix.accuracyM ?: return app.getString(R.string.ride_gps_ready)
+        return if (appPrefs.imperial) {
+            app.getString(R.string.ride_gps_accuracy_ft, (accuracy * FEET_PER_METRE).roundToInt())
+        } else {
+            app.getString(R.string.ride_gps_accuracy_m, accuracy.roundToInt())
         }
     }
 
@@ -449,159 +421,17 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun onTileTap(index: Int) {
-        val now = System.currentTimeMillis()
-        controller.onTileTap(index, now)
-        controller.takeFeedback()?.let { confirmTap(it.undone) }
-        publish(now)
-    }
-
-    fun endOpenSurface() {
-        val now = System.currentTimeMillis()
-        controller.endOpenSurface(now)
-        controller.takeFeedback()?.let { confirmTap(it.undone) }
-        publish(now)
-    }
-
-    private fun writeSample(nowMs: Long) {
-        val tag = controller.drainTag()
-        val fix = location.latest
-        val obs = radar.observation()
-        val channels = obs.fitChannels()
-        val riderKph =
-            if (fix != null && fix.hasSpeed && fix.speedMps != null) {
-                (fix.speedMps * 3.6f).toInt()
-            } else {
-                0
-            }
-        vehicles.onSample(
-            tracking = obs.tracking,
-            occupiedCount = obs.occupiedCount(),
-            nearestClosingKph = obs.nearestClosingKph(),
-            riderKph = riderKph,
-        )
-        fitSession?.appendSample(
-            nowMs = nowMs,
-            fix = fix,
-            poiType = tag?.type ?: 0,
-            poiDetail = tag?.detail ?: 0,
-            radarCount = channels[0],
-            radarNear = channels[1],
-            radarSpeed = channels[2],
-        )
-        _ui.update {
-            it.copy(
-                sampleCount = it.sampleCount + 1,
-                lastFixLabel = fixLabel(),
-            )
-        }
-    }
-
-    private fun fixLabel(): String {
-        val f = location.latest ?: return "no fix"
-        return "%.5f, %.5f".format(f.latitude, f.longitude)
-    }
-
-    private fun publish(nowMs: Long = System.currentTimeMillis()) {
-        _ui.update {
-            it.copy(
-                scout = mergeRadar(controller.snapshot(nowMs)),
-                pendingTags = controller.queueSize(),
-                hasLocationPermission = location.hasPermission(),
-                bluetoothPermissionOk = radar.ble.hasBluetoothPermission(),
-                bluetoothOk = radar.ble.bluetoothEnabled(),
-                antAvailable = radar.antAvailable(),
-                transport = radarPrefs.transport,
-                radarState = radar.state(),
-                bondedRadarName = radarPrefs.name,
-                bondedRadarAddress = radarPrefs.address
-                    ?: radarPrefs.antDeviceNumber?.let { n -> "ANT+$n" },
-                antDeviceNumber = radarPrefs.antDeviceNumber,
-                lastFixLabel = if (controller.timer == TimerState.IDLE) {
-                    it.lastFixLabel
-                } else {
-                    fixLabel()
-                },
-                imperial = appPrefs.imperial,
-                keepScreenOn = appPrefs.keepScreenOn,
-                radarSeeking = isRadarSeeking(nowMs),
-            )
-        }
-    }
-
-    private fun mergeRadar(base: ScoutUiState): ScoutUiState {
-        val tracking = radar.state() == RadarLinkState.TRACKING
-        return base.copy(
-            radarLive = tracking,
-            carCount = vehicles.carCount,
-            lastCarSpeedKph = vehicles.lastCarSpeedKph,
-            imperial = appPrefs.imperial,
-        )
-    }
-
-    /**
-     * Eyes-on-road confirm: haptic when available, plus two distinct tones
-     * (Garmin TONE_KEY vs TONE_RESET). Failure must not block tagging.
-     */
-    private fun confirmTap(undone: Boolean) {
-        try {
-            vibrate(undone)
-        } catch (_: Exception) {
-        }
-        try {
-            playTone(undone)
-        } catch (_: Exception) {
-        }
-    }
-
-    private fun vibrate(undone: Boolean) {
-        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vm = getApplication<Application>()
-                .getSystemService(VibratorManager::class.java)
-            vm?.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            getApplication<Application>().getSystemService(Vibrator::class.java)
-        } ?: return
-        if (!vibrator.hasVibrator()) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val effect =
-                if (undone) {
-                    VibrationEffect.createWaveform(longArrayOf(0, 90, 60, 90), -1)
-                } else {
-                    VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE)
-                }
-            vibrator.vibrate(effect)
-        } else {
-            @Suppress("DEPRECATION")
-            if (undone) vibrator.vibrate(longArrayOf(0, 90, 60, 90), -1)
-            else vibrator.vibrate(120)
-        }
-    }
-
-    private fun playTone(undone: Boolean) {
-        // STREAM_MUSIC so it is audible over a bar-mount phone speaker/BT.
-        val tone =
-            if (undone) ToneGenerator.TONE_CDMA_CONFIRM // lower / reset-like
-            else ToneGenerator.TONE_PROP_BEEP // short key click
-        val durationMs = if (undone) 220 else 120
-        val tg = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
-        tg.startTone(tone, durationMs)
-        viewModelScope.launch {
-            delay(durationMs.toLong() + 40L)
-            tg.release()
-        }
-    }
-
     override fun onCleared() {
         location.stop()
-        radar.disconnect()
+        radar.onRideStop()
+        feedback.release()
         super.onCleared()
     }
 
-    companion object {
-        /** Stop trying to find a missing radar after Start/Resume. */
-        private const val RADAR_SEEK_MS = 45_000L
-        private const val RADAR_RETRY_GAP_MS = 5_000L
+    private companion object {
+        const val SAMPLE_INTERVAL_MS = 1_000L
+        const val ANIMATION_INTERVAL_MS = 250L
+        const val KPH_PER_MPS = 3.6f
+        const val FEET_PER_METRE = 3.28084f
     }
 }

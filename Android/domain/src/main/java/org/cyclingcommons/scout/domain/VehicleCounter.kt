@@ -12,8 +12,6 @@ class VehicleCounter {
     private var pendingRise: Int = 0
     var lastCarSpeedKph: Int = -1
         private set
-    var radarLive: Boolean = false
-        private set
 
     fun onSample(
         tracking: Boolean,
@@ -22,12 +20,11 @@ class VehicleCounter {
         riderKph: Int,
     ) {
         if (!tracking) {
+            // SPEC §8.5.5: never credit an arrival across a coverage gap.
             prevCount = 0
             pendingRise = 0
-            radarLive = false
             return
         }
-        radarLive = true
         val count = occupiedCount.coerceAtLeast(0)
         if (pendingRise > 0 && count > 0) {
             carCount += pendingRise
@@ -45,7 +42,6 @@ class VehicleCounter {
         prevCount = 0
         pendingRise = 0
         lastCarSpeedKph = -1
-        radarLive = false
     }
 }
 

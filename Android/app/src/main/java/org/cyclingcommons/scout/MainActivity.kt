@@ -3,31 +3,41 @@ package org.cyclingcommons.scout
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.cyclingcommons.scout.domain.TimerState
+import org.cyclingcommons.scout.ui.HelpScreen
 import org.cyclingcommons.scout.ui.IntroScreen
 import org.cyclingcommons.scout.ui.PairRadarScreen
 import org.cyclingcommons.scout.ui.ScoutRideScreen
 import org.cyclingcommons.scout.ui.SettingsScreen
+import org.cyclingcommons.scout.ui.theme.ScoutColors
 import org.cyclingcommons.scout.ui.theme.ScoutTheme
+import org.cyclingcommons.scout.ui.theme.ThemeMode
 
 class MainActivity : ComponentActivity() {
     private val rideVm: RideViewModel by viewModels()
@@ -39,41 +49,36 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        requestNeededPermissions()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
+        paintColdStart()
         setContent {
-            ScoutTheme {
-                val model by rideVm.ui.collectAsStateWithLifecycle()
-                LaunchedEffect(model.keepScreenOn, model.scout.timer) {
-                    val hold =
-                        model.keepScreenOn && model.scout.timer == TimerState.RUNNING
-                    if (hold) {
-                        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                    } else {
-                        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                    }
-                }
+            val model by rideVm.ui.collectAsStateWithLifecycle()
+            val dark = model.themeMode.isDark()
+            ScoutTheme(dark = dark) {
+                SystemBarIcons(dark = dark)
+                KeepScreenOn(
+                    hold = model.keepScreenOn && model.scout.timer == TimerState.RUNNING,
+                )
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color(0xFF0E0E0E))
+                        .background(ScoutColors.Screen)
                         .statusBarsPadding()
                         .navigationBarsPadding(),
                 ) {
-                    when {
-                        model.showIntro -> {
-                            IntroScreen(onContinue = rideVm::dismissIntro)
-                        }
-                        model.showPairRadar -> {
-                            PairRadarScreen(
-                                state = model.radarState,
-                                bluetoothOk = model.bluetoothOk,
-                                permissionOk = model.bluetoothPermissionOk,
-                                antAvailable = model.antAvailable,
-                                transport = model.transport,
-                                bondedName = model.bondedRadarName,
-                                bondedAddress = model.bondedRadarAddress,
-                                devices = model.radarDevices,
+                    Crossfade(targetState = model.screen, label = "screen") { screen ->
+                        when (screen) {
+                            Screen.INTRO -> IntroScreen(
+                                onContinue = {
+                                    rideVm.dismissIntro()
+                                    requestNeededPermissions()
+                                },
+                            )
+                            Screen.PAIR_RADAR -> PairRadarScreen(
+                                status = model.radar,
                                 onTransport = rideVm::setTransport,
                                 onStartBleScan = {
                                     requestNeededPermissions()
@@ -85,32 +90,36 @@ class MainActivity : ComponentActivity() {
                                 onForget = rideVm::forgetRadar,
                                 onBack = rideVm::closePairRadar,
                             )
-                        }
-                        model.showSettings -> {
-                            val radarLabel =
-                                model.bondedRadarName ?: model.bondedRadarAddress ?: "none"
-                            SettingsScreen(
+                            Screen.SETTINGS -> SettingsScreen(
                                 imperial = model.imperial,
                                 keepScreenOn = model.keepScreenOn,
-                                radarLabel = "Preferred: $radarLabel · ${model.transport}",
+                                themeMode = model.themeMode,
+                                radarLabel = getString(
+                                    R.string.settings_radar_preferred,
+                                    model.radar.savedName
+                                        ?: model.radar.savedAddress
+                                        ?: getString(R.string.radar_none),
+                                    model.radar.transport.name.lowercase(),
+                                ),
                                 rides = model.rides,
                                 onImperial = rideVm::setImperial,
                                 onKeepScreenOn = rideVm::setKeepScreenOn,
+                                onThemeMode = rideVm::setThemeMode,
                                 onPairRadar = {
                                     requestNeededPermissions()
                                     rideVm.openPairRadar()
                                 },
-                                onShareRide = { ride ->
-                                    rideVm.shareRide(ride)?.let {
-                                        startActivity(Intent.createChooser(it, "Share FIT"))
-                                    }
-                                },
+                                onHelp = { rideVm.openHelp() },
+                                onReplayIntro = rideVm::replayIntro,
+                                onShareRide = { ride -> share(rideVm.shareRide(ride)) },
                                 onDeleteRide = rideVm::deleteRide,
                                 onBack = rideVm::closeSettings,
                             )
-                        }
-                        else -> {
-                            ScoutRideScreen(
+                            Screen.HELP -> HelpScreen(
+                                onBack = rideVm::closeHelp,
+                                onOpenLink = ::openLink,
+                            )
+                            Screen.RIDE -> ScoutRideScreen(
                                 model = model,
                                 onStart = {
                                     requestNeededPermissions()
@@ -124,12 +133,10 @@ class MainActivity : ComponentActivity() {
                                 onStop = rideVm::stopRide,
                                 onTileTap = rideVm::onTileTap,
                                 onEndOpenSurface = rideVm::endOpenSurface,
-                                onShareFit = {
-                                    rideVm.shareLastFit()?.let {
-                                        startActivity(Intent.createChooser(it, "Share FIT"))
-                                    }
-                                },
+                                onShareFit = { share(rideVm.shareLastFit()) },
                                 onSettings = rideVm::openSettings,
+                                onHelp = { rideVm.openHelp(Screen.RIDE) },
+                                onDismissMessage = rideVm::clearUserMessage,
                             )
                         }
                     }
@@ -138,17 +145,75 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        rideVm.setUiVisible(true)
+    }
+
     override fun onResume() {
         super.onResume()
         rideVm.refreshPermissions()
     }
 
+    override fun onStop() {
+        rideVm.setUiVisible(false)
+        super.onStop()
+    }
+
+    /**
+     * The window is drawn before the first composition, and its theme background can
+     * only follow the *system* night mode. Repaint it here so a rider who overrode the
+     * appearance does not get a flash of the other one on every cold start.
+     */
+    private fun paintColdStart() {
+        val dark = when (AppPrefs(this).themeMode) {
+            ThemeMode.LIGHT -> false
+            ThemeMode.DARK -> true
+            ThemeMode.SYSTEM -> return
+        }
+        val background = if (dark) {
+            R.color.screen_background_dark
+        } else {
+            R.color.screen_background_light
+        }
+        window.setBackgroundDrawable(ColorDrawable(ContextCompat.getColor(this, background)))
+    }
+
+    /** Status and navigation glyphs have to invert with the page under them. */
+    @Composable
+    private fun SystemBarIcons(dark: Boolean) {
+        val view = LocalView.current
+        LaunchedEffect(dark) {
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
+            }
+        }
+    }
+
+    @Composable
+    private fun KeepScreenOn(hold: Boolean) {
+        LaunchedEffect(hold) {
+            if (hold) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+    }
+
+    private fun share(intent: Intent?) {
+        intent?.let { startActivity(Intent.createChooser(it, getString(R.string.settings_share))) }
+    }
+
+    private fun openLink(url: String) {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }
+
     private fun requestNeededPermissions() {
         val needed = mutableListOf<String>()
-        if (Build.VERSION.SDK_INT >= 33) {
-            if (!granted(Manifest.permission.POST_NOTIFICATIONS)) {
-                needed += Manifest.permission.POST_NOTIFICATIONS
-            }
+        if (Build.VERSION.SDK_INT >= 33 && !granted(Manifest.permission.POST_NOTIFICATIONS)) {
+            needed += Manifest.permission.POST_NOTIFICATIONS
         }
         if (!granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
             needed += Manifest.permission.ACCESS_FINE_LOCATION
@@ -162,10 +227,10 @@ class MainActivity : ComponentActivity() {
                 needed += Manifest.permission.BLUETOOTH_CONNECT
             }
         }
-        if (needed.isNotEmpty()) {
-            permissions.launch(needed.toTypedArray())
-        } else {
+        if (needed.isEmpty()) {
             rideVm.refreshPermissions()
+        } else {
+            permissions.launch(needed.toTypedArray())
         }
     }
 

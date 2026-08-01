@@ -1,123 +1,156 @@
 package org.cyclingcommons.scout.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import org.cyclingcommons.scout.R
 import org.cyclingcommons.scout.recording.RideFile
+import org.cyclingcommons.scout.ui.components.ScoutButton
+import org.cyclingcommons.scout.ui.components.ScoutPage
+import org.cyclingcommons.scout.ui.components.ScoutSection
+import org.cyclingcommons.scout.ui.components.ScoutToggleRow
+import org.cyclingcommons.scout.ui.theme.ScoutColors
+import org.cyclingcommons.scout.ui.theme.ScoutSpacing
+import org.cyclingcommons.scout.ui.theme.ThemeMode
 import java.text.DateFormat
 import java.util.Date
-
-private val Muted = Color(0xFFCCCCCC)
 
 @Composable
 fun SettingsScreen(
     imperial: Boolean,
     keepScreenOn: Boolean,
+    themeMode: ThemeMode,
     radarLabel: String,
     rides: List<RideFile>,
     onImperial: (Boolean) -> Unit,
     onKeepScreenOn: (Boolean) -> Unit,
+    onThemeMode: (ThemeMode) -> Unit,
     onPairRadar: () -> Unit,
+    onHelp: () -> Unit,
+    onReplayIntro: () -> Unit,
     onShareRide: (RideFile) -> Unit,
     onDeleteRide: (RideFile) -> Unit,
     onBack: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val versionName = remember(context) {
-        try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        } catch (_: Exception) {
-            null
-        } ?: "?"
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+    ScoutPage(
+        title = stringResource(R.string.settings_title),
+        onBack = onBack,
+        titleColor = ScoutColors.Brand,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Settings", style = MaterialTheme.typography.titleLarge, color = Color.White)
-            TextButton(onClick = onBack) { Text("Done") }
-        }
-
         Column(
             modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = ScoutSpacing.lg,
+                    end = ScoutSpacing.lg,
+                    bottom = ScoutSpacing.xxl,
+                ),
+            verticalArrangement = Arrangement.spacedBy(ScoutSpacing.xl),
         ) {
-            SettingsBlock(title = "Display") {
-                Text("Speed units", color = Muted, fontSize = 16.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = !imperial,
-                        onClick = { onImperial(false) },
-                        label = { Text("km/h") },
-                    )
-                    FilterChip(
-                        selected = imperial,
-                        onClick = { onImperial(true) },
-                        label = { Text("mph") },
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Keep screen on while recording", color = Color.White, fontSize = 16.sp)
-                        Text(
-                            "Default off — saves battery. Notification still opens Scout.",
-                            color = Muted,
-                            fontSize = 15.sp,
+            ScoutSection(
+                title = stringResource(R.string.settings_display),
+                titleColor = ScoutColors.Brand,
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_appearance),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = ScoutColors.TextPrimary,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(ScoutSpacing.sm)) {
+                    ThemeMode.entries.forEach { mode ->
+                        ChoiceChip(
+                            label = stringResource(mode.label()),
+                            selected = mode == themeMode,
+                            onClick = { onThemeMode(mode) },
                         )
                     }
-                    Switch(checked = keepScreenOn, onCheckedChange = onKeepScreenOn)
                 }
+                Text(
+                    text = stringResource(R.string.settings_appearance_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ScoutColors.TextSecondary,
+                )
+                HorizontalDivider(color = ScoutColors.Outline)
+                Text(
+                    text = stringResource(R.string.settings_units),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = ScoutColors.TextPrimary,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(ScoutSpacing.sm)) {
+                    ChoiceChip(
+                        label = stringResource(R.string.settings_units_metric),
+                        selected = !imperial,
+                        onClick = { onImperial(false) },
+                    )
+                    ChoiceChip(
+                        label = stringResource(R.string.settings_units_imperial),
+                        selected = imperial,
+                        onClick = { onImperial(true) },
+                    )
+                }
+                HorizontalDivider(color = ScoutColors.Outline)
+                ScoutToggleRow(
+                    label = stringResource(R.string.settings_keep_screen_on),
+                    hint = stringResource(R.string.settings_keep_screen_on_hint),
+                    checked = keepScreenOn,
+                    onCheckedChange = onKeepScreenOn,
+                )
             }
 
-            SettingsBlock(
-                title = "Radar",
-                subtitle = "Radar uses more power. Prefer ANT+ when the phone has it.",
+            ScoutSection(
+                title = stringResource(R.string.settings_radar),
+                subtitle = stringResource(R.string.settings_radar_hint),
+                titleColor = ScoutColors.Brand,
             ) {
-                Text(radarLabel, color = Color.White, fontSize = 16.sp)
-                Button(onClick = onPairRadar) { Text("Pair / change radar") }
+                Text(
+                    text = radarLabel,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = ScoutColors.TextPrimary,
+                )
+                ScoutButton(
+                    label = stringResource(R.string.settings_radar_pair),
+                    onClick = onPairRadar,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
 
-            SettingsBlock(
-                title = "Rides (FIT)",
-                subtitle = "Kept on this phone until you delete them — share anytime.",
+            ScoutSection(
+                title = stringResource(R.string.settings_rides),
+                subtitle = stringResource(R.string.settings_rides_hint),
+                titleColor = ScoutColors.Brand,
             ) {
                 if (rides.isEmpty()) {
-                    Text("No rides yet", color = Muted, fontSize = 16.sp)
+                    Text(
+                        text = stringResource(R.string.settings_rides_empty),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = ScoutColors.TextSecondary,
+                    )
                 } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        rides.forEach { ride ->
+                    Column {
+                        rides.forEachIndexed { index, ride ->
+                            if (index > 0) HorizontalDivider(color = ScoutColors.Outline)
                             RideRow(
                                 ride = ride,
                                 onShare = { onShareRide(ride) },
@@ -128,30 +161,58 @@ fun SettingsScreen(
                 }
             }
 
+            ScoutSection(
+                title = stringResource(R.string.settings_about),
+                titleColor = ScoutColors.Brand,
+            ) {
+                ScoutButton(
+                    label = stringResource(R.string.settings_help),
+                    onClick = onHelp,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                ScoutButton(
+                    label = stringResource(R.string.settings_show_intro),
+                    onClick = onReplayIntro,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
             Text(
-                "Version: v$versionName",
-                color = Color.White,
-                fontSize = 16.sp,
+                text = stringResource(R.string.settings_version, appVersion()),
+                style = MaterialTheme.typography.bodySmall,
+                color = ScoutColors.TextSecondary,
+                modifier = Modifier.padding(start = ScoutSpacing.xs),
             )
         }
     }
 }
 
+@StringRes
+private fun ThemeMode.label(): Int = when (this) {
+    ThemeMode.SYSTEM -> R.string.settings_appearance_system
+    ThemeMode.LIGHT -> R.string.settings_appearance_light
+    ThemeMode.DARK -> R.string.settings_appearance_dark
+}
+
+/** Unselected has to look like a control rather than a label, in both appearances. */
 @Composable
-private fun SettingsBlock(
-    title: String,
-    subtitle: String? = null,
-    content: @Composable () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium)
-            if (subtitle != null) {
-                Text(subtitle, color = Muted, fontSize = 15.sp)
-            }
-        }
-        content()
-    }
+private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label, style = MaterialTheme.typography.labelLarge) },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = ScoutColors.Brand,
+            selectedLabelColor = ScoutColors.TextOnBrand,
+            labelColor = ScoutColors.TextPrimary,
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            enabled = true,
+            selected = selected,
+            borderColor = ScoutColors.OutlineStrong,
+            selectedBorderColor = ScoutColors.Brand,
+        ),
+    )
 }
 
 @Composable
@@ -160,35 +221,59 @@ private fun RideRow(
     onShare: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val whenText = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
-        .format(Date(ride.modifiedMs))
-    val kb = (ride.sizeBytes / 1024.0).let { "%.1f KB".format(it) }
+    val meta = stringResource(
+        R.string.settings_ride_meta,
+        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+            .format(Date(ride.modifiedMs)),
+        formatSize(ride.sizeBytes),
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = ScoutSpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                ride.name,
-                color = Color.White,
-                fontSize = 15.sp,
+                text = ride.name,
+                style = MaterialTheme.typography.bodyLarge,
+                color = ScoutColors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                "$whenText · $kb",
-                color = Muted,
-                fontSize = 13.sp,
+                text = meta,
+                style = MaterialTheme.typography.bodySmall,
+                color = ScoutColors.TextSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        TextButton(onClick = onShare) { Text("Share") }
-        TextButton(onClick = onDelete) {
-            Text("Delete", color = Color(0xFFEF9A9A))
+        IconButton(onClick = onShare) {
+            Icon(
+                imageVector = Icons.Filled.Share,
+                contentDescription = stringResource(R.string.settings_share),
+                tint = ScoutColors.TextSecondary,
+            )
+        }
+        IconButton(onClick = onDelete) {
+            Icon(
+                imageVector = Icons.Filled.Delete,
+                contentDescription = stringResource(R.string.settings_delete),
+                tint = ScoutColors.Brand,
+            )
         }
     }
 }
+
+@Composable
+private fun appVersion(): String {
+    val context = LocalContext.current
+    return remember(context) {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "?"
+    }
+}
+
+private fun formatSize(bytes: Long): String = "%.1f KB".format(bytes / 1024.0)

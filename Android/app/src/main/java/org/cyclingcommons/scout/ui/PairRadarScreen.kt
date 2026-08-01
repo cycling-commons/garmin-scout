@@ -4,47 +4,32 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import org.cyclingcommons.scout.R
 import org.cyclingcommons.scout.domain.RadarLinkState
+import org.cyclingcommons.scout.sensors.radar.RadarDeviceRow
+import org.cyclingcommons.scout.sensors.radar.RadarStatus
 import org.cyclingcommons.scout.sensors.radar.RadarTransport
-
-data class RadarDeviceRow(
-    val address: String,
-    val name: String?,
-    /** Higher = closer. Bonded-only seeds use [RSSI_UNKNOWN]. */
-    val rssi: Int = RSSI_UNKNOWN,
-    /** Name or advertised service UUID looks like a bike radar. */
-    val likelyRadar: Boolean = false,
-) {
-    companion object {
-        const val RSSI_UNKNOWN = -999
-    }
-}
+import org.cyclingcommons.scout.ui.components.ScoutButton
+import org.cyclingcommons.scout.ui.components.ScoutPage
+import org.cyclingcommons.scout.ui.components.ScoutSection
+import org.cyclingcommons.scout.ui.theme.ScoutColors
+import org.cyclingcommons.scout.ui.theme.ScoutSpacing
 
 @Composable
 fun PairRadarScreen(
-    state: RadarLinkState,
-    bluetoothOk: Boolean,
-    permissionOk: Boolean,
-    antAvailable: Boolean,
-    transport: RadarTransport,
-    bondedName: String?,
-    bondedAddress: String?,
-    devices: List<RadarDeviceRow>,
+    status: RadarStatus,
     onTransport: (RadarTransport) -> Unit,
     onStartBleScan: () -> Unit,
     onStopBleScan: () -> Unit,
@@ -53,113 +38,127 @@ fun PairRadarScreen(
     onForget: () -> Unit,
     onBack: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    val scanning = status.link == RadarLinkState.SCANNING
+    ScoutPage(
+        title = stringResource(R.string.pair_title),
+        onBack = {
+            onStopBleScan()
+            onBack()
+        },
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Pair radar", style = MaterialTheme.typography.titleLarge, color = Color.White)
-            TextButton(onClick = {
-                onStopBleScan()
-                onBack()
-            }) {
-                Text("Done")
-            }
-        }
-        Text(
-            text = "ANT+ hardware: " + if (antAvailable) "available" else "not found",
-            color = Color(0xFFCCCCCC),
-        )
-        Text("Transport preference", color = Color.White)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TransportChip("Auto", transport == RadarTransport.AUTO) {
-                onTransport(RadarTransport.AUTO)
-            }
-            TransportChip("ANT+", transport == RadarTransport.ANT_PLUS, enabled = antAvailable) {
-                onTransport(RadarTransport.ANT_PLUS)
-            }
-            TransportChip("BLE", transport == RadarTransport.BLE) {
-                onTransport(RadarTransport.BLE)
-            }
-        }
-        Text(
-            text = when {
-                !permissionOk && transport != RadarTransport.ANT_PLUS ->
-                    "Bluetooth permission needed for BLE"
-                !bluetoothOk && transport == RadarTransport.BLE -> "Turn on Bluetooth"
-                !antAvailable && transport == RadarTransport.ANT_PLUS ->
-                    "Install ANT Radio Service / use a USB ANT stick"
-                bondedAddress != null &&
-                    (state == RadarLinkState.DISCONNECTED || state == RadarLinkState.ABSENT) ->
-                    "Saved — connects when you Start recording"
-                else -> "State: $state"
-            },
-            color = Color(0xFFCCCCCC),
-        )
-        if (bondedAddress != null) {
-            Text(
-                text = "Saved: ${bondedName ?: "radar"} ($bondedAddress)",
-                color = Color.White,
-            )
-            Button(onClick = onForget) { Text("Forget") }
-        }
-        if (transport != RadarTransport.BLE) {
-            Button(
-                onClick = onStartAntSearch,
-                enabled = antAvailable,
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = ScoutSpacing.lg,
+                    end = ScoutSpacing.lg,
+                    bottom = ScoutSpacing.xxl,
+                ),
+            verticalArrangement = Arrangement.spacedBy(ScoutSpacing.xl),
+        ) {
+            ScoutSection(
+                title = stringResource(R.string.pair_transport),
+                subtitle = statusHint(status),
             ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(ScoutSpacing.sm)) {
+                    TransportChip(
+                        label = stringResource(R.string.pair_transport_auto),
+                        selected = status.transport == RadarTransport.AUTO,
+                        onClick = { onTransport(RadarTransport.AUTO) },
+                    )
+                    TransportChip(
+                        label = stringResource(R.string.pair_transport_ant),
+                        selected = status.transport == RadarTransport.ANT_PLUS,
+                        enabled = status.antAvailable,
+                        onClick = { onTransport(RadarTransport.ANT_PLUS) },
+                    )
+                    TransportChip(
+                        label = stringResource(R.string.pair_transport_ble),
+                        selected = status.transport == RadarTransport.BLE,
+                        onClick = { onTransport(RadarTransport.BLE) },
+                    )
+                }
                 Text(
-                    if (state == RadarLinkState.CONNECTING || state == RadarLinkState.TRACKING) {
-                        "ANT+ searching / tracking…"
-                    } else {
-                        "Search ANT+ radar"
-                    },
+                    text = stringResource(
+                        if (status.antAvailable) {
+                            R.string.pair_ant_available
+                        } else {
+                            R.string.pair_ant_missing
+                        },
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ScoutColors.TextSecondary,
                 )
-            }
-        }
-        if (transport != RadarTransport.ANT_PLUS) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = onStartBleScan,
-                    enabled = permissionOk && bluetoothOk,
-                ) {
-                    Text(if (state == RadarLinkState.SCANNING) "Scanning BLE…" else "Scan BLE")
-                }
-                if (state == RadarLinkState.SCANNING) {
-                    Button(onClick = onStopBleScan) { Text("Stop") }
-                }
-            }
-        }
-        Text(
-            "Disconnect the radar from its brand app (e.g. Magene Utility) before pairing here.",
-            color = Color(0xFFCCCCCC),
-            fontSize = 16.sp,
-        )
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            items(devices, key = { it.address }) { row ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelect(row) }
-                        .padding(vertical = 12.dp),
-                ) {
-                    val title =
-                        row.name?.takeIf { it.isNotBlank() }
-                            ?: if (row.likelyRadar) "Possible radar" else "Nearby device"
+                if (status.savedAddress != null) {
+                    HorizontalDivider(color = ScoutColors.Outline)
                     Text(
-                        text = title,
-                        color = if (row.likelyRadar) Color(0xFFE8C9A0) else Color.White,
-                        fontSize = 16.sp,
+                        text = stringResource(
+                            R.string.pair_saved,
+                            status.savedName ?: stringResource(R.string.radar_label),
+                            status.savedAddress,
+                        ),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = ScoutColors.TextPrimary,
                     )
-                    val signal =
-                        if (row.rssi > RadarDeviceRow.RSSI_UNKNOWN) "${row.rssi} dBm" else "paired"
+                    ScoutButton(
+                        label = stringResource(R.string.pair_forget),
+                        onClick = onForget,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+
+            ScoutSection(
+                title = stringResource(R.string.pair_devices),
+                subtitle = stringResource(R.string.pair_exclusive_hint),
+            ) {
+                // No ANT hardware means no ANT button at all — a dead control reads as a bug.
+                if (status.transport != RadarTransport.BLE && status.antAvailable) {
+                    ScoutButton(
+                        label = stringResource(
+                            if (status.link == RadarLinkState.CONNECTING) {
+                                R.string.pair_ant_searching
+                            } else {
+                                R.string.pair_ant_search
+                            },
+                        ),
+                        onClick = onStartAntSearch,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                if (status.transport != RadarTransport.ANT_PLUS) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(ScoutSpacing.sm)) {
+                        ScoutButton(
+                            label = stringResource(
+                                if (scanning) R.string.pair_ble_scanning else R.string.pair_ble_scan,
+                            ),
+                            onClick = onStartBleScan,
+                            primary = !scanning,
+                            enabled = status.bluetoothPermission && status.bluetoothOn,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (scanning) {
+                            ScoutButton(
+                                label = stringResource(R.string.pair_ble_stop),
+                                onClick = onStopBleScan,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+                if (status.devices.isEmpty()) {
                     Text(
-                        text = "${row.address}  ·  $signal",
-                        color = Color(0xFFAAAAAA),
-                        fontSize = 13.sp,
+                        text = stringResource(R.string.pair_devices_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ScoutColors.TextSecondary,
                     )
+                } else {
+                    Column {
+                        status.devices.forEachIndexed { index, row ->
+                            if (index > 0) HorizontalDivider(color = ScoutColors.Outline)
+                            DeviceRow(row = row, onClick = { onSelect(row) })
+                        }
+                    }
                 }
             }
         }
@@ -167,16 +166,71 @@ fun PairRadarScreen(
 }
 
 @Composable
+private fun statusHint(status: RadarStatus): String = when {
+    !status.bluetoothPermission && status.transport != RadarTransport.ANT_PLUS ->
+        stringResource(R.string.pair_need_bluetooth_permission)
+    !status.bluetoothOn && status.transport == RadarTransport.BLE ->
+        stringResource(R.string.pair_need_bluetooth_on)
+    !status.antAvailable && status.transport == RadarTransport.ANT_PLUS ->
+        stringResource(R.string.pair_need_ant_service)
+    status.savedAddress != null &&
+        (status.link == RadarLinkState.DISCONNECTED || status.link == RadarLinkState.ABSENT) ->
+        stringResource(R.string.pair_saved_ready)
+    else -> stringResource(
+        when (status.link) {
+            RadarLinkState.ABSENT -> R.string.pair_state_absent
+            RadarLinkState.SCANNING -> R.string.pair_state_scanning
+            RadarLinkState.CONNECTING -> R.string.pair_state_connecting
+            RadarLinkState.TRACKING -> R.string.pair_state_tracking
+            RadarLinkState.DISCONNECTED -> R.string.pair_state_disconnected
+        },
+    )
+}
+
+@Composable
+private fun DeviceRow(row: RadarDeviceRow, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = ScoutSpacing.md),
+        verticalArrangement = Arrangement.spacedBy(ScoutSpacing.xs),
+    ) {
+        Text(
+            text = row.name?.takeIf { it.isNotBlank() } ?: stringResource(
+                if (row.likelyRadar) R.string.pair_possible_radar else R.string.pair_unknown_device,
+            ),
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (row.likelyRadar) ScoutColors.Brand else ScoutColors.TextPrimary,
+        )
+        Text(
+            text = "${row.address}  ·  " + if (row.rssi > RadarDeviceRow.RSSI_UNKNOWN) {
+                stringResource(R.string.pair_signal_dbm, row.rssi)
+            } else {
+                stringResource(R.string.pair_signal_paired)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = ScoutColors.TextSecondary,
+        )
+    }
+}
+
+@Composable
 private fun TransportChip(
     label: String,
     selected: Boolean,
-    enabled: Boolean = true,
     onClick: () -> Unit,
+    enabled: Boolean = true,
 ) {
     FilterChip(
         selected = selected,
         onClick = onClick,
         enabled = enabled,
-        label = { Text(label) },
+        label = { Text(label, style = MaterialTheme.typography.labelLarge) },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = ScoutColors.Brand,
+            selectedLabelColor = ScoutColors.TextOnBrand,
+            labelColor = ScoutColors.TextSecondary,
+        ),
     )
 }

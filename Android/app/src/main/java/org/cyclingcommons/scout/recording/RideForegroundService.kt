@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import org.cyclingcommons.scout.MainActivity
 import org.cyclingcommons.scout.R
 import org.cyclingcommons.scout.domain.TimerState
@@ -73,7 +74,9 @@ class RideForegroundService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.ride_notification_title))
             .setContentText(text)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_scout_notification)
+            .setColor(ContextCompat.getColor(this, R.color.brand))
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setContentIntent(open)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -99,11 +102,7 @@ class RideForegroundService : Service() {
                     val i = Intent(app, RideForegroundService::class.java).apply {
                         putExtra(EXTRA_PAUSED, timer == TimerState.PAUSED)
                     }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        app.startForegroundService(i)
-                    } else {
-                        app.startService(i)
-                    }
+                    app.startForegroundService(i)
                 }
             }
         }

@@ -1,6 +1,7 @@
 package org.cyclingcommons.scout.sensors.radar
 
 import android.content.Context
+import androidx.core.content.edit
 
 /** Persists preferred radar transport + device ids. */
 class RadarPrefs(context: Context) {
@@ -8,31 +9,21 @@ class RadarPrefs(context: Context) {
         .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     var transport: RadarTransport
-        get() = RadarTransport.entries.getOrElse(prefs.getInt(KEY_TRANSPORT, 0)) { RadarTransport.AUTO }
-        set(value) {
-            prefs.edit().putInt(KEY_TRANSPORT, value.ordinal).apply()
-        }
+        get() = RadarTransport.entries
+            .getOrElse(prefs.getInt(KEY_TRANSPORT, 0)) { RadarTransport.AUTO }
+        set(value) = prefs.edit { putInt(KEY_TRANSPORT, value.ordinal) }
 
     var address: String?
         get() = prefs.getString(KEY_ADDRESS, null)
-        set(value) {
-            prefs.edit().putString(KEY_ADDRESS, value).apply()
-        }
+        set(value) = prefs.edit { putString(KEY_ADDRESS, value) }
 
     var name: String?
         get() = prefs.getString(KEY_NAME, null)
-        set(value) {
-            prefs.edit().putString(KEY_NAME, value).apply()
-        }
+        set(value) = prefs.edit { putString(KEY_NAME, value) }
 
     var antDeviceNumber: Int?
-        get() {
-            val v = prefs.getInt(KEY_ANT_NUM, -1)
-            return if (v < 0) null else v
-        }
-        set(value) {
-            prefs.edit().putInt(KEY_ANT_NUM, value ?: -1).apply()
-        }
+        get() = prefs.getInt(KEY_ANT_NUM, -1).takeIf { it >= 0 }
+        set(value) = prefs.edit { putInt(KEY_ANT_NUM, value ?: -1) }
 
     /** Last known BLE GAP / Utility name for a MAC (Magene often omits name in ads). */
     fun rememberedName(address: String): String? =
@@ -41,19 +32,19 @@ class RadarPrefs(context: Context) {
     fun rememberName(address: String, name: String) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
-        prefs.edit().putString(KEY_KNOWN_PREFIX + address.uppercase(), trimmed).apply()
+        prefs.edit { putString(KEY_KNOWN_PREFIX + address.uppercase(), trimmed) }
     }
 
     fun clear() {
-        prefs.edit().clear().apply()
+        prefs.edit { clear() }
     }
 
-    companion object {
-        private const val PREFS = "scout_radar"
-        private const val KEY_ADDRESS = "ble_address"
-        private const val KEY_NAME = "ble_name"
-        private const val KEY_TRANSPORT = "transport"
-        private const val KEY_ANT_NUM = "ant_device_number"
-        private const val KEY_KNOWN_PREFIX = "known_name_"
+    private companion object {
+        const val PREFS = "scout_radar"
+        const val KEY_ADDRESS = "ble_address"
+        const val KEY_NAME = "ble_name"
+        const val KEY_TRANSPORT = "transport"
+        const val KEY_ANT_NUM = "ant_device_number"
+        const val KEY_KNOWN_PREFIX = "known_name_"
     }
 }

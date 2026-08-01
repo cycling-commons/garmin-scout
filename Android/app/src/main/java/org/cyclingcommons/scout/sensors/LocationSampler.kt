@@ -15,13 +15,16 @@ import androidx.core.content.ContextCompat
 data class LocationFix(
     val latitude: Double,
     val longitude: Double,
+    /** Metres per second when the provider reported it; null otherwise. */
     val speedMps: Float?,
-    val hasSpeed: Boolean,
+    /** Horizontal accuracy in metres, when the provider reported it. */
+    val accuracyM: Float?,
     val timeMs: Long,
 )
 
 /**
- * ~1 Hz GPS while recording. GPS provider only (TECHNICAL §5 — no redundant network poll).
+ * ~1 Hz GPS while recording. GPS provider only (TECHNICAL §5 — no redundant network poll),
+ * and updates are requested only between [start] and [stop] so idle costs nothing.
  */
 class LocationSampler(context: Context) {
     private val app = context.applicationContext
@@ -35,13 +38,7 @@ class LocationSampler(context: Context) {
 
     private val listener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
-            latest = LocationFix(
-                latitude = location.latitude,
-                longitude = location.longitude,
-                speedMps = if (location.hasSpeed()) location.speed else null,
-                hasSpeed = location.hasSpeed(),
-                timeMs = location.time,
-            )
+            latest = location.toFix()
         }
 
         @Deprecated("Deprecated in Java")
@@ -59,35 +56,18 @@ class LocationSampler(context: Context) {
         if (listening || !hasPermission()) return
         latest = null
         try {
-            if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                lm.requestLocationUpdates(
-                    LocationManager.GPS_PROVIDER,
-                    1000L,
-                    0f,
-                    listener,
-                    Looper.getMainLooper(),
-                )
-                listening = true
-                seedLastKnown()
-            }
+            if (!lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) return
+            lm.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                UPDATE_INTERVAL_MS,
+                0f,
+                listener,
+                Looper.getMainLooper(),
+            )
+            listening = true
+            seedLastKnown()
         } catch (_: SecurityException) {
             listening = false
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun seedLastKnown() {
-        if (!hasPermission()) return
-        val last = runCatching { lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) }.getOrNull()
-            ?: return
-        if (latest == null) {
-            latest = LocationFix(
-                latitude = last.latitude,
-                longitude = last.longitude,
-                speedMps = if (last.hasSpeed()) last.speed else null,
-                hasSpeed = last.hasSpeed(),
-                timeMs = last.time,
-            )
         }
     }
 
@@ -99,5 +79,27 @@ class LocationSampler(context: Context) {
             // ignore
         }
         listening = false
+    }
+
+    /** Tag the first samples with the last fix rather than nothing while GPS warms up. */
+    @SuppressLint("MissingPermission")
+    private fun seedLastKnown() {
+        if (latest != null || !hasPermission()) return
+        latest = runCatching { lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) }
+            .getOrNull()
+            ?.toFix()
+    }
+
+    private fun Location.toFix() = LocationFix(
+        latitude = latitude,
+        longitude = longitude,
+        speedMps = if (hasSpeed()) speed else null,
+        accuracyM = if (hasAccuracy()) accuracy else null,
+        timeMs = time,
+    )
+
+    private companion object {
+        /** SPEC §4.2 cadence — one Scout sample per second. */
+        const val UPDATE_INTERVAL_MS = 1_000L
     }
 }

@@ -17,7 +17,7 @@ enum class UiMode {
 
 object Tiles {
     val grid: List<Tile> = listOf(
-        Tile(PoiType.DANGER, "DANGER", 0xD1421F),
+        Tile(PoiType.DANGER, "BEWARE", 0xD1421F),
         Tile(PoiType.CLOSURE, "CLOSURE", 0x8E44AD),
         Tile(PoiType.SURFACE, "SURFACE", 0x8E5A2B),
         Tile(PoiType.UI_RESUPPLY, "RESUPPLY", 0x1E7FC0),
