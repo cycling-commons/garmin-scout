@@ -94,6 +94,7 @@ fun IntroScreen(onContinue: () -> Unit) {
         ScoutLogo(
             markSize = 112.dp,
             layout = ScoutLogoLayout.Vertical,
+            lockupWidthFraction = 0.56f,
         )
 
         Spacer(Modifier.height(ScoutSpacing.md))
@@ -166,6 +167,8 @@ fun IntroScreen(onContinue: () -> Unit) {
 
         Spacer(Modifier.height(ScoutSpacing.xxl))
 
+        Spacer(Modifier.height(ScoutSpacing.lg))
+
         Text(
 
             text = stringResource(R.string.intro_powering).uppercase(),
@@ -190,7 +193,7 @@ fun IntroScreen(onContinue: () -> Unit) {
 
                 .fillMaxWidth()
 
-                .height(110.dp),
+                .height(143.dp),
 
         )
 

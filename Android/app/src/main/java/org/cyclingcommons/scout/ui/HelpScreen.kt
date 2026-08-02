@@ -2,12 +2,9 @@ package org.cyclingcommons.scout.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -19,8 +16,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -39,10 +34,6 @@ import org.cyclingcommons.scout.ui.theme.ScoutSpacing
 
 /** Floated beside the first paragraph in the Cycling Commons help section. */
 private val HelpCcLogoWidth = 108.dp
-
-/** logo_cycling_commons.webp is 512×512 with transparent padding baked in. */
-private const val CcLogoTopInsetFraction = 119f / 512f
-private const val CcLogoContentHeightFraction = 222f / 512f
 
 @Composable
 fun HelpScreen(
@@ -121,21 +112,12 @@ private fun HelpSectionFlowingText(
             horizontalArrangement = Arrangement.spacedBy(ScoutSpacing.md),
             verticalAlignment = Alignment.Top,
         ) {
-            Box(
-                modifier = Modifier
-                    .width(HelpCcLogoWidth)
-                    .height(HelpCcLogoWidth * CcLogoContentHeightFraction)
-                    .clip(RectangleShape),
-            ) {
-                Image(
-                    painter = painterResource(drawable),
-                    contentDescription = stringResource(R.string.cd_cycling_commons_logo),
-                    contentScale = ContentScale.FillWidth,
-                    modifier = Modifier
-                        .width(HelpCcLogoWidth)
-                        .offset(y = -HelpCcLogoWidth * CcLogoTopInsetFraction),
-                )
-            }
+            Image(
+                painter = painterResource(drawable),
+                contentDescription = stringResource(R.string.cd_cycling_commons_logo),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.width(HelpCcLogoWidth),
+            )
             Text(
                 text = paragraphs.first(),
                 style = MaterialTheme.typography.bodyLarge.copy(

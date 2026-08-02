@@ -80,6 +80,8 @@ fun ScoutLogo(
     markSize: Dp,
     modifier: Modifier = Modifier,
     layout: ScoutLogoLayout = ScoutLogoLayout.Horizontal,
+    /** Vertical lockup only — fraction of parent width (default matches ride chrome scale). */
+    lockupWidthFraction: Float = 0.7f,
     @Suppress("UNUSED_PARAMETER") nameSize: TextUnit? = null,
 ) {
     when (layout) {
@@ -109,7 +111,7 @@ fun ScoutLogo(
             }
         }
         ScoutLogoLayout.Vertical -> {
-            ScoutLockupLogo(modifier = modifier.fillMaxWidth(0.7f))
+            ScoutLockupLogo(modifier = modifier.fillMaxWidth(lockupWidthFraction))
         }
     }
 }
