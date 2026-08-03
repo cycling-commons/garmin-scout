@@ -3,8 +3,13 @@
 Semantic versioning; this file is the source of truth for the version string
 entered in the Connect IQ store at upload time.
 
+## Unreleased
+- Tile label **NOTICE** (was BEWARE); FIT type code 1 stays `DANGER`.
+- Optional radar strip via `SHOW_RADAR_STRIP` (default off). Counting and FIT
+  `radar_*` fields still run.
+
 ## 1.0.0 — 2026-07-22 (first store release)
-- One-tap tagging on a full-screen touch data field: **danger, closure** (with
+- One-tap tagging on a full-screen touch data field: **notice, closure** (with
   duration), **surface** (8 OSM-aligned types), **resupply** (water/food/repair),
   **scenery, other**.
 - **Surface stretches**: a type starts a stretch, another type switches it, END

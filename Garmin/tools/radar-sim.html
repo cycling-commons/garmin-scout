@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scout — radar tally simulator</title>
+  <style>
+    :root {
+      --brand: #f0321c;
+      --screen: #1a1a1a;
+      --surface: #2a2a2a;
+      --text: #f5f5f5;
+      --muted: #9a9a9a;
+      --recording: #4caf50;
+      --outline: #444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: var(--screen);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 1rem 1.25rem 0.5rem;
+      border-bottom: 1px solid var(--outline);
+    }
+    header h1 { margin: 0 0 0.25rem; font-size: 1.15rem; font-weight: 600; }
+    header p { margin: 0; color: var(--muted); font-size: 0.9rem; max-width: 52rem; line-height: 1.45; }
+    main { padding: 1rem 1.25rem 2rem; max-width: 1000px; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+      align-items: center;
+    }
+    button {
+      background: var(--brand);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    button.secondary { background: var(--surface); border: 1px solid var(--outline); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    label { color: var(--muted); font-size: 0.85rem; display: flex; align-items: center; gap: 0.35rem; }
+    canvas {
+      display: block;
+      width: 100%;
+      max-width: 960px;
+      height: auto;
+      border-radius: 12px;
+      background: #111;
+      border: 1px solid var(--outline);
+      cursor: crosshair;
+    }
+    .strip {
+      margin-top: 0.75rem;
+      max-width: 960px;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: var(--surface);
+      border: 1px solid var(--recording);
+      border-radius: 10px;
+      font-size: 1.05rem;
+    }
+    .strip .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--recording); flex-shrink: 0;
+    }
+    .strip .label { color: var(--muted); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; }
+    .strip .metrics { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .strip.flash { outline: 2px solid #4caf50; }
+    .strip.off { border-color: var(--outline); }
+    .strip.off .dot { background: var(--outline); }
+    .debug {
+      margin-top: 0.75rem;
+      max-width: 960px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-family: ui-monospace, Consolas, monospace;
+      line-height: 1.5;
+    }
+    .log {
+      margin-top: 0.5rem;
+      max-width: 960px;
+      max-height: 140px;
+      overflow: auto;
+      font-size: 0.78rem;
+      font-family: ui-monospace, Consolas, monospace;
+      background: #0d0d0d;
+      border: 1px solid var(--outline);
+      border-radius: 8px;
+      padding: 0.5rem;
+      color: #bbb;
+    }
+    .legend { margin-top: 0.5rem; font-size: 0.85rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Scout radar tally simulator</h1>
+    <p>
+      Side view: bike stands still (right side). <strong>Add car</strong> spawns at
+      <strong>140&nbsp;m</strong> behind (first radar detection). Closing speed is random
+      +35…50&nbsp;kph. Cars do not overtake. Click a car to turn it off the road.
+      The blue dots are <strong>targets</strong> (not the tally). <strong>Count and speed</strong>
+      both update on the radar strip only in the last second before pass (≥2&nbsp;s in view).
+    </p>
+  </header>
+  <main>
+    <div class="toolbar">
+      <button type="button" id="btnAdd">Add car</button>
+      <button type="button" id="btnStep" class="secondary" title="Advance one 1-second tick">+1 s tick</button>
+      <button type="button" id="btnReset" class="secondary">Reset ride</button>
+      <label><input type="checkbox" id="chkPause" /> Pause time</label>
+      <label><input type="checkbox" id="chkDebug" checked /> Debug panel</label>
+    </div>
+    <canvas id="view" width="960" height="280" aria-label="Radar simulation viewport"></canvas>
+    <p class="legend">Green = rear radar. Blue = on radar; grey = passed. Click a blue car to turn away (must <strong>not</strong> count — pass needs nearest ≤10&nbsp;m during stretch and ≤20&nbsp;m on leave). Strip updates on a real pass.</p>
+    <div class="strip" id="strip">
+      <span class="dot"></span>
+      <span class="label">Radar</span>
+      <span class="metrics" id="stripMetrics">0 cars</span>
+    </div>
+    <pre class="debug" id="debug" hidden></pre>
+    <div class="log" id="log"></div>
+  </main>
+  <script>
+    // === VehicleCounter — keep in sync with Android/domain/.../VehicleCounter.kt ===
+    const PASS_CONFIRM_M = 10;
+    const PASS_LEAVE_MAX_M = 20;
+    class VehicleCounter {
+      constructor() { this.resetRide(); }
+      resetRide() {
+        this.carCount = 0;
+        this.prevCount = 0;
+        this.heldClosingKph = -1;
+        this.heldRangeM = -1;
+        this.minRangeInStretchM = Infinity;
+        this.stretchLen = 0;
+        this.lastCarSpeedKph = -1;
+      }
+      onSample(tracking, occupiedCount, nearestClosingKph, nearestRangeM, riderKph) {
+        if (!tracking) {
+          this.prevCount = 0;
+          this.heldClosingKph = -1;
+          this.heldRangeM = -1;
+          this.minRangeInStretchM = Infinity;
+          this.stretchLen = 0;
+          return { left: 0, speedValid: false };
+        }
+        const count = Math.max(0, occupiedCount);
+        const speedValid = nearestClosingKph >= 0;
+        const rangeValid = nearestRangeM >= 0;
+        let left = 0;
+
+        const passLeave =
+          count < this.prevCount &&
+          this.heldClosingKph >= 0 &&
+          this.stretchLen >= 2 &&
+          this.minRangeInStretchM <= PASS_CONFIRM_M &&
+          this.heldRangeM >= 0 &&
+          this.heldRangeM <= PASS_LEAVE_MAX_M;
+        if (passLeave) {
+          left = this.prevCount - count;
+          this.carCount += left;
+          this.lastCarSpeedKph = this.heldClosingKph + riderKph;
+        }
+
+        if (count === 0) {
+          this.heldClosingKph = -1;
+          this.heldRangeM = -1;
+          this.minRangeInStretchM = Infinity;
+          this.stretchLen = 0;
+        } else {
+          this.stretchLen = this.prevCount === 0 ? 1 : this.stretchLen + 1;
+          if (speedValid) this.heldClosingKph = nearestClosingKph;
+          if (rangeValid) {
+            this.heldRangeM = nearestRangeM;
+            if (count < this.prevCount) {
+              this.minRangeInStretchM = nearestRangeM;
+            } else if (nearestRangeM < this.minRangeInStretchM) {
+              this.minRangeInStretchM = nearestRangeM;
+            }
+          }
+        }
+
+        this.prevCount = count;
+        return { left, speedValid };
+      }
+    }
+
+    const canvas = document.getElementById('view');
+    const ctx = canvas.getContext('2d');
+
+    // --- simulation constants ---
+    // Bike on the right; scale so the full 140 m radar cone fits on screen.
+    // (Old layout put the bike at x=220 with 2.2 px/m — 140 m was off the left edge.)
+    const RADAR_RANGE_M = 140;
+    const AHEAD_PX = 100;
+    const LEFT_MARGIN = 48;
+    const BIKE_X = canvas.width - AHEAD_PX;
+    const BIKE_Y = 150;
+    const PX_PER_M = (BIKE_X - LEFT_MARGIN) / RADAR_RANGE_M;
+    const MIN_GAP_M = 12;
+    /** First detection: car enters radar at max range. */
+    const SPAWN_BEHIND_M = RADAR_RANGE_M;
+    const RIDER_KPH = 0;
+    const TICK_MS = 1000;
+
+    const counter = new VehicleCounter();
+    let cars = [];
+    let nextId = 1;
+    let tick = 0;
+    let lastTickAt = performance.now();
+    let animId = 0;
+
+    function randClosingKph() {
+      return 35 + Math.floor(Math.random() * 16); // 35..50 inclusive
+    }
+
+    function spawnCar() {
+      const closingKph = randClosingKph();
+      const groundKph = closingKph + RIDER_KPH;
+      let spawnM = SPAWN_BEHIND_M;
+      const inRadar = cars.filter(c => c.onRadar);
+      if (inRadar.length) {
+        const back = Math.min(...inRadar.map(c => c.distanceM));
+        spawnM = Math.max(spawnM, back + MIN_GAP_M);
+      }
+      cars.push({
+        id: nextId++,
+        distanceM: spawnM,
+        closingKph,
+        groundKph,
+        onRadar: true,
+        turnAnim: null, // { t, dir: -1|1 }
+      });
+    }
+
+    function radarCars() {
+      // Rear radar only: once a car reaches the bike (≤0 m) it has passed and
+      // drops off — that leave tick is when VehicleCounter credits count + speed.
+      // (Earlier we kept targets until −8 m ahead, which delayed the tally ~2 s.)
+      return cars.filter(c => c.onRadar && c.distanceM > 0 && c.distanceM <= RADAR_RANGE_M);
+    }
+
+    function nearestClosing() {
+      const vis = radarCars();
+      if (!vis.length) return { count: 0, closingKph: -1, rangeM: -1 };
+      const nearest = vis.reduce((a, b) => (a.distanceM < b.distanceM ? a : b));
+      return {
+        count: vis.length,
+        closingKph: nearest.closingKph,
+        rangeM: Math.round(nearest.distanceM),
+      };
+    }
+
+    function sampleTick() {
+      const { count, closingKph, rangeM } = nearestClosing();
+      const meta = counter.onSample(true, count, closingKph, rangeM, RIDER_KPH);
+      tick++;
+      logLine(tick, count, closingKph, meta);
+      updateStrip();
+      if (meta.left > 0) {
+        const strip = document.getElementById('strip');
+        strip.classList.add('flash');
+        setTimeout(() => strip.classList.remove('flash'), 400);
+      }
+      updateDebug(count, closingKph, meta);
+    }
+
+    function logLine(t, count, closingKph, meta) {
+      const el = document.getElementById('log');
+      const speed = counter.lastCarSpeedKph;
+      const line = `t=${String(t).padStart(3)}s  raw=${count}  closing=${closingKph >= 0 ? closingKph : '—'} kph`
+        + `  left=${meta.left}  stretch=${counter.stretchLen}`
+        + `  →  ${counter.carCount} cars`
+        + (speed >= 0 ? `  ${speed} ±5 kph` : '');
+      el.textContent = line + '\n' + el.textContent;
+    }
+
+    function updateStrip() {
+      const strip = document.getElementById('strip');
+      const m = document.getElementById('stripMetrics');
+      const n = counter.carCount;
+      const sp = counter.lastCarSpeedKph;
+      const tracking = radarCars().length > 0;
+      const live = tracking || sp >= 0;
+      strip.classList.toggle('off', !live);
+      // Match app strip: tally + speed only after a leave; while approaching show 0 cars / no kph.
+      if (sp >= 0) {
+        m.textContent = `${n} car${n === 1 ? '' : 's'}   ${sp} ±5 kph`;
+      } else if (tracking) {
+        m.textContent = `${n} car${n === 1 ? '' : 's'}   (approaching…)`;
+      } else {
+        m.textContent = `${n} car${n === 1 ? '' : 's'}`;
+      }
+    }
+
+    function updateDebug(count, closingKph, meta) {
+      const el = document.getElementById('debug');
+      if (!document.getElementById('chkDebug').checked) {
+        el.hidden = true;
+        return;
+      }
+      el.hidden = false;
+      el.textContent =
+        `tick ${tick}  |  raw count ${count}  prev ${counter.prevCount}  stretch ${counter.stretchLen}`
+        + `  heldRange ${counter.heldRangeM}m  minRange ${counter.minRangeInStretchM === Infinity ? '∞' : counter.minRangeInStretchM + 'm'}`
+        + `  left ${meta.left}  speedValid ${meta.speedValid}\n`
+        + `display  carCount=${counter.carCount}  lastCarSpeedKph=${counter.lastCarSpeedKph}`
+        + `  (pass if min≤${PASS_CONFIRM_M}m & leave≤${PASS_LEAVE_MAX_M}m)`;
+    }
+
+    function physics(dt) {
+      const sorted = cars
+        .filter(c => c.onRadar || c.distanceM <= 0)
+        .sort((a, b) => a.distanceM - b.distanceM);
+      for (let i = 0; i < sorted.length; i++) {
+        const c = sorted[i];
+        if (c.turnAnim) {
+          c.turnAnim.t += dt;
+          if (c.turnAnim.t > 0.45) c.onRadar = false;
+          continue;
+        }
+        let maxCloseMps = c.closingKph / 3.6;
+        if (c.onRadar && i > 0) {
+          const ahead = sorted[i - 1];
+          if (ahead.onRadar) {
+            const gap = c.distanceM - ahead.distanceM;
+            if (gap < MIN_GAP_M) {
+              const aheadMps = ahead.closingKph / 3.6;
+              maxCloseMps = Math.min(maxCloseMps, Math.max(0, aheadMps * 0.98));
+            }
+          }
+        }
+        c.distanceM -= maxCloseMps * dt;
+        // Alongside / ahead of the bike → gone from rear radar (pass moment).
+        if (c.onRadar && c.distanceM <= 0) {
+          c.onRadar = false;
+        }
+      }
+      // Keep drawing briefly after pass, then drop once off the right edge.
+      cars = cars.filter(c => {
+        if (c.turnAnim && c.turnAnim.t <= 0.6) return true;
+        if (c.onRadar) return true;
+        const x = BIKE_X - c.distanceM * PX_PER_M;
+        return x < canvas.width + 40;
+      });
+    }
+
+    function carScreenPos(c) {
+      const x = BIKE_X - c.distanceM * PX_PER_M;
+      let y = BIKE_Y;
+      if (c.turnAnim) {
+        const p = Math.min(1, c.turnAnim.t / 0.45);
+        y += c.turnAnim.dir * p * 55;
+      }
+      return { x, y };
+    }
+
+    function draw() {
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, w, h);
+
+      // road
+      ctx.fillStyle = '#2c2c2c';
+      ctx.fillRect(0, BIKE_Y - 36, w, 72);
+      ctx.strokeStyle = '#555';
+      ctx.setLineDash([16, 14]);
+      ctx.beginPath();
+      ctx.moveTo(0, BIKE_Y);
+      ctx.lineTo(w, BIKE_Y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // radar range (behind bike) — full 140 m visible
+      const rangePx = RADAR_RANGE_M * PX_PER_M;
+      ctx.fillStyle = 'rgba(76, 175, 80, 0.08)';
+      ctx.fillRect(BIKE_X - rangePx, BIKE_Y - 50, rangePx, 100);
+      ctx.strokeStyle = 'rgba(76, 175, 80, 0.35)';
+      ctx.strokeRect(BIKE_X - rangePx, BIKE_Y - 50, rangePx, 100);
+
+      // distance ticks: 140 m / 70 m / bike
+      ctx.fillStyle = '#6a8f6a';
+      ctx.font = '10px system-ui';
+      ctx.textAlign = 'center';
+      for (const m of [140, 70, 0]) {
+        const x = BIKE_X - m * PX_PER_M;
+        ctx.strokeStyle = 'rgba(76, 175, 80, 0.45)';
+        ctx.beginPath();
+        ctx.moveTo(x, BIKE_Y - 50);
+        ctx.lineTo(x, BIKE_Y - 36);
+        ctx.stroke();
+        ctx.fillText(m === 0 ? '0 m' : `${m} m`, x, BIKE_Y - 56);
+      }
+
+      // bike
+      ctx.fillStyle = '#f0321c';
+      ctx.beginPath();
+      ctx.arc(BIKE_X, BIKE_Y, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = '11px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('bike', BIKE_X, BIKE_Y - 22);
+
+      // cars — blue = still on rear radar; grey = just passed (ahead, not counted again)
+      const drawOrder = [...cars].sort((a, b) => b.distanceM - a.distanceM);
+      for (const c of drawOrder) {
+        const { x, y } = carScreenPos(c);
+        if (x < -30 || x > w + 30) continue;
+        const passed = !c.onRadar && !c.turnAnim;
+        ctx.fillStyle = c.turnAnim ? '#888' : (passed ? '#666' : '#4ea8ff');
+        ctx.beginPath();
+        ctx.arc(x, y, 11, 0, Math.PI * 2);
+        ctx.fill();
+        if (!passed) {
+          ctx.fillStyle = '#aaa';
+          ctx.font = '9px system-ui';
+          ctx.textAlign = 'center';
+          ctx.fillText(`+${c.closingKph} · ${Math.round(c.distanceM)}m`, x, y + 22);
+        }
+      }
+
+      // direction hint
+      ctx.fillStyle = '#666';
+      ctx.font = '11px system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillText('← behind (radar)', LEFT_MARGIN, BIKE_Y + 70);
+      ctx.textAlign = 'right';
+      ctx.fillText('ahead →', w - 12, BIKE_Y + 70);
+    }
+
+    function hitTestCar(mx, my) {
+      for (const c of cars) {
+        if (!c.onRadar && !c.turnAnim) continue;
+        const { x, y } = carScreenPos(c);
+        if ((mx - x) ** 2 + (my - y) ** 2 <= 14 ** 2) return c;
+      }
+      return null;
+    }
+
+    function turnCar(c, dir) {
+      if (!c.onRadar || c.turnAnim) return;
+      c.turnAnim = { t: 0, dir };
+    }
+
+    function loop(now) {
+      const dt = Math.min(0.05, (now - (loop.last || now)) / 1000);
+      loop.last = now;
+      if (!document.getElementById('chkPause').checked) {
+        physics(dt);
+        if (now - lastTickAt >= TICK_MS) {
+          lastTickAt += TICK_MS;
+          sampleTick();
+        }
+      }
+      draw();
+      animId = requestAnimationFrame(loop);
+    }
+
+    canvas.addEventListener('click', (e) => {
+      const r = canvas.getBoundingClientRect();
+      const mx = (e.clientX - r.left) * (canvas.width / r.width);
+      const my = (e.clientY - r.top) * (canvas.height / r.height);
+      const c = hitTestCar(mx, my);
+      if (!c) return;
+      const dir = my < BIKE_Y ? -1 : 1;
+      turnCar(c, dir);
+    });
+
+    document.getElementById('btnAdd').addEventListener('click', () => spawnCar());
+    document.getElementById('btnStep').addEventListener('click', () => {
+      physics(1);
+      sampleTick();
+    });
+    document.getElementById('btnReset').addEventListener('click', () => {
+      cars = [];
+      counter.resetRide();
+      tick = 0;
+      lastTickAt = performance.now();
+      document.getElementById('log').textContent = '';
+      updateStrip();
+      updateDebug(0, -1, { left: 0, speedValid: false });
+    });
+    document.getElementById('chkDebug').addEventListener('change', () => {
+      const { count, closingKph } = nearestClosing();
+      updateDebug(count, closingKph, { left: 0, speedValid: closingKph >= 0 });
+    });
+
+    updateStrip();
+    animId = requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

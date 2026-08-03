@@ -190,7 +190,7 @@ check('cancelled surface tags are skipped', (() => {
 console.log('\n[4] Radar vehicle counting');
 
 // Fake a parsed file: radar_count per second. null = radar not tracking.
-const radarFile = (counts, speeds = []) => ({
+const radarFile = (counts, speeds = [], nears = []) => ({
   devFields: {
     '0-2': { name: 'radar_count', devIdx: 0, fieldNum: 2 },
     '0-3': { name: 'radar_near',  devIdx: 0, fieldNum: 3 },
@@ -199,11 +199,18 @@ const radarFile = (counts, speeds = []) => ({
   messages: counts.map((c, i) => ({
     globalNum: 20,
     fields: { 253: 1000000000 + i, 0: 1, 1: 1 },
-    devFields: { '0-2': c, '0-3': null, '0-4': speeds[i] ?? null },
+    devFields: {
+      '0-2': c,
+      // Default ≤10 m so leave looks like a confirmed pass; override with
+      // nears[] for turn-aways / mid-range dropout.
+      '0-3': i < nears.length ? nears[i] : (c != null && c > 0 ? 8 : null),
+      '0-4': i < speeds.length ? speeds[i] : (c != null && c > 0 ? 40 : null),
+    },
   })),
 });
 
-const nCars = (counts) => mod.countVehicles(radarFile(counts)).total;
+const nCars = (counts, speeds = [], nears = []) =>
+  mod.countVehicles(radarFile(counts, speeds, nears)).total;
 
 check('one car approaching and passing -> 1',
       nCars([0, 1, 1, 1, 0]) === 1, 'got ' + nCars([0, 1, 1, 1, 0]));
@@ -214,10 +221,9 @@ check('a platoon of 3 arriving together -> 3',
 check('cars joining one at a time -> 3',
       nCars([0, 1, 2, 3, 2, 1, 0]) === 3, 'got ' + nCars([0, 1, 2, 3, 2, 1, 0]));
 check('empty road -> 0', nCars([0, 0, 0, 0]) === 0);
-// prev starts at 0, so targets already tracked at ride start read as arrivals.
-// That's intended: they are vehicles that are about to overtake you.
+// Need ≥2 occupied seconds before the first leave, or the earliest departure is dropped.
 check('cars already behind at ride start are counted',
-      nCars([3, 2, 1, 0]) === 3, 'got ' + nCars([3, 2, 1, 0]));
+      nCars([3, 3, 2, 1, 0]) === 3, 'got ' + nCars([3, 3, 2, 1, 0]));
 check('a falling count never adds cars',
       nCars([0, 3, 3, 2, 1, 0]) === 3, 'got ' + nCars([0, 3, 3, 2, 1, 0]));
 
@@ -234,16 +240,24 @@ check('coverage is partial when radar drops mid-ride',
       mod.countVehicles(radarFile([1, 1, null, null])).coverage === 0.5);
 check('a car already present when radar connects still counts',
       nCars([null, 1, 1, 0]) === 1, 'got ' + nCars([null, 1, 1, 0]));
-check('radar dropping out does not double-count the same car',
-      nCars([0, 1, 1, null, 1, 1, 0]) === 2,
-      'got ' + nCars([0, 1, 1, null, 1, 1, 0]) + ' (2 = known limitation: dropout looks like a new arrival)');
-check('closing speed captured at arrival',
-      mod.countVehicles(radarFile([0, 1, 1, 0], [null, 45, 40, null])).passes[0].speed === 45);
+check('radar dropping out mid-pass does not credit that car',
+      nCars([0, 1, 1, null, 1, 1, 0]) === 1,
+      'got ' + nCars([0, 1, 1, null, 1, 1, 0]) + ' (only the second stretch leaves cleanly)');
+check('closing speed captured at last second before pass',
+      mod.countVehicles(radarFile([0, 1, 1, 0], [null, 45, 40, null])).passes[0].speed === 40);
 
-// An arrival must be corroborated by a target still being there a second later.
-// Matches the head unit's tally; see "How the on-screen tally counts a car".
+// Count + speed commit on leave after ≥2 s in view.
 check('a one-second blip is not a car',
       nCars([0, 1, 0, 0]) === 0, 'got ' + nCars([0, 1, 0, 0]));
+check('mid-range turn-away is not a pass',
+      nCars([0, 1, 1, 0], [], [null, 80, 70, null]) === 0,
+      'got ' + nCars([0, 1, 1, 0], [], [null, 80, 70, null]));
+check('convoy: second turns far after first pass -> only 1',
+      nCars([0, 2, 2, 1, 1, 0], [], [null, 20, 10, 60, 55, null]) === 1,
+      'got ' + nCars([0, 2, 2, 1, 1, 0], [], [null, 20, 10, 60, 55, null]));
+check('count without speed is not a car',
+      nCars([0, 1, 1, 0], [null, null, null, null]) === 0,
+      'got ' + nCars([0, 1, 1, 0], [null, null, null, null]));
 check('repeated one-second blips stay uncounted',
       nCars([0, 1, 0, 1, 0, 1, 0]) === 0, 'got ' + nCars([0, 1, 0, 1, 0, 1, 0]));
 check('a phantom pair in one second is not two cars',
@@ -254,9 +268,11 @@ check('a queue whose peak lasts one second keeps its last car',
       nCars([0, 1, 2, 3, 2, 1, 0]) === 3, 'got ' + nCars([0, 1, 2, 3, 2, 1, 0]));
 check('a blip during a real pass is counted (accepted trade-off)',
       nCars([0, 1, 1, 2, 1, 1, 0]) === 2, 'got ' + nCars([0, 1, 1, 2, 1, 1, 0]));
-check('confirmed passes keep their arrival time, not the confirming second',
-      mod.countVehicles(radarFile([0, 1, 1, 1, 0], [null, 60, 55, 50, null]))
-         .passes[0].speed === 60);
+check('pass time and speed are from the last second before leave',
+      (() => {
+        const p = mod.countVehicles(radarFile([0, 1, 1, 1, 0], [null, 60, 55, 50, null]));
+        return p.passes[0].speed === 50;
+      })());
 check('no radar fields at all -> null (not zero traffic)',
       mod.countVehicles({ devFields: {}, messages: [] }) === null);
 check('maxConcurrent tracks the busiest second',

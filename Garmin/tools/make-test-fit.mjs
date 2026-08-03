@@ -66,9 +66,9 @@ export const SCENARIO = (() => {
   // Undo pair: two DANGER within 3 s cancel each other
   tag(57, 1, 0);
   tag(58, 1, 0);
-  // Two vehicle passes (count rises then a car is still there next second)
-  radar(6, 1, 40, 28); radar(7, 1, 25, 30); radar(8, 0, NA, NA);   // car 1
-  radar(35, 1, 50, 45); radar(36, 1, 30, 48); radar(37, 0, NA, NA); // car 2
+  // Two vehicle passes — nearest must reach ≤10 m so leave confirms as a pass.
+  radar(6, 1, 40, 28); radar(7, 1, 8, 30); radar(8, 0, NA, NA);   // car 1
+  radar(35, 1, 50, 45); radar(36, 1, 5, 48); radar(37, 0, NA, NA); // car 2
   return rec;
 })();
 

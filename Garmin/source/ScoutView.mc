@@ -92,7 +92,14 @@ class ScoutView extends WatchUi.DataField {
     // "N cars" strip live for a store screenshot. Flip to true locally, capture
     // the shot, flip back to false before committing — MUST be false at release;
     // double-check before running the release build (see docs/PUBLISHING.md).
+    // Requires SHOW_RADAR_STRIP = true as well, or the strip has nowhere to draw.
     hidden const DEMO_RADAR = false;
+
+    // Optional on-device strip: ride car tally and last-pass ground speed after a
+    // car has already gone by (not a live approaching warning). Radar is always
+    // polled and written to FIT; this only controls whether the strip is drawn.
+    // Default false; set true for a personal sideload if you want the readout.
+    hidden const SHOW_RADAR_STRIP = false;
 
     hidden const FLASH_MS = 1500;       // confirmation flash duration
     hidden const PICK_MS  = 12000;      // sub-page gives up (no pick) after this
@@ -111,7 +118,10 @@ class ScoutView extends WatchUi.DataField {
     hidden var _radar as AntPlus.BikeRadar?;
     hidden var _carCount as Number = 0;      // display only, mirrors the parser
     hidden var _prevCount as Number = 0;     // raw target count from the previous second
-    hidden var _pendingRise as Number = 0;   // arrivals awaiting corroboration
+    hidden var _heldClosing as Number = -1;  // closing kph while targets present
+    hidden var _heldRange as Number = -1;    // nearest range (m) previous sample
+    hidden var _minRange as Number = 10000;  // closest nearest-range in stretch
+    hidden var _stretchLen as Number = 0;    // consecutive occupied seconds
 
     // FIFO of [type, detail], one drained per compute(). A single slot would
     // collapse two taps in the same second into one record — which would also
@@ -156,7 +166,7 @@ class ScoutView extends WatchUi.DataField {
     // Each row is [code as Number, label as String, RGB as Number], laid out
     // left-to-right, top-to-bottom over a COLS-wide grid.
     hidden var _buttons as Array<Array> = [
-        [POI_DANGER,   "BEWARE",   0xD1421F],
+        [POI_DANGER,   "NOTICE",   0xD1421F],
         [POI_CLOSURE,  "CLOSURE",  0x8E44AD],
         [POI_SURFACE,  "SURFACE",  0x8E5A2B],
         [UI_RESUPPLY,  "RESUPPLY", 0x1E7FC0],
@@ -355,30 +365,37 @@ class ScoutView extends WatchUi.DataField {
                     }
                 }
 
-                // An arrival is held for one read and credited only if a target
-                // is still there on the next one: a real car leaving hands the
-                // radar over to the car behind it, while a one-second blip falls
-                // back to an empty road. Corroborating on *presence* rather than
-                // on the same count level is what keeps a tight convoy intact —
-                // requiring the peak itself to repeat drops the last car of the
-                // group whenever the third arrives as the first is dropping off.
-                // Costs one second of latency on the tally.
-                if (_pendingRise > 0 && count > 0) {
-                    _carCount += _pendingRise;
-                }
-                var rise = (count > _prevCount) ? (count - _prevCount) : 0;
-
-                // Same two-read gate on the speed: nothing is shown off a single
-                // read. From the second read on it refreshes every second, so the
-                // value left on screen is that car's *closest* reading — taken
-                // just before it passed and the radar dropped it. The radar reports
-                // closing speed (car minus bike), so the rider's own speed at this
-                // read is added back to show the car's actual ground speed.
-                if (count > 0 && _prevCount > 0 && speedNow >= 0) {
-                    _lastCarSpeed = speedNow + _riderKph;
+                // Count + speed on leave only when the nearest target got within
+                // 10 m during the stretch and the last reading was ≤20 m. A car
+                // that turns away farther out must not count — and must not leave
+                // its closeness on the next car still behind.
+                if (_prevCount > 0 && count < _prevCount && _heldClosing >= 0 &&
+                    _stretchLen >= 2 && _minRange <= 10 &&
+                    _heldRange >= 0 && _heldRange <= 20) {
+                    _carCount += (_prevCount - count);
+                    _lastCarSpeed = _heldClosing + _riderKph;
                 }
 
-                _pendingRise = rise;
+                if (count == 0) {
+                    _heldClosing = -1;
+                    _heldRange = -1;
+                    _minRange = 10000;
+                    _stretchLen = 0;
+                } else {
+                    _stretchLen = (_prevCount == 0) ? 1 : (_stretchLen + 1);
+                    if (speedNow >= 0) {
+                        _heldClosing = speedNow;
+                    }
+                    if (near != RADAR_NA) {
+                        _heldRange = near;
+                        if (count < _prevCount) {
+                            _minRange = near; // fresh nearest after departure
+                        } else if (near < _minRange) {
+                            _minRange = near;
+                        }
+                    }
+                }
+
                 _prevCount = count;
                 _radarLive = true;
             } else {
@@ -386,7 +403,10 @@ class ScoutView extends WatchUi.DataField {
                 // crediting it on reconnect, where "still a target present" would
                 // be meaningless across the gap.
                 _prevCount = 0;
-                _pendingRise = 0;
+                _heldClosing = -1;
+                _heldRange = -1;
+                _minRange = 10000;
+                _stretchLen = 0;
                 _radarLive = false;
             }
         }
@@ -410,7 +430,8 @@ class ScoutView extends WatchUi.DataField {
         // fixed pixel count: this field runs on screens from 240 to 480 wide.
         // Sized for the largest font the strip may use, so a narrow screen that
         // falls back to a smaller one just leaves slack rather than clipping.
-        _stripH = dc.getFontHeight(Graphics.FONT_MEDIUM) + 4;
+        // When SHOW_RADAR_STRIP is false the grid takes the full field height.
+        _stripH = SHOW_RADAR_STRIP ? (dc.getFontHeight(Graphics.FONT_MEDIUM) + 4) : 0;
         _gridH = _h - _stripH;
         // The strip speed follows the rider's unit setting; the logged FIT field
         // stays kph either way, so only this readout switches. Read once here —
@@ -635,7 +656,7 @@ class ScoutView extends WatchUi.DataField {
                 dc.drawRectangle(bx + 2, by + 2, cw - 4, ch - 4);
                 dc.setColor(fg, Graphics.COLOR_TRANSPARENT);
             }
-            // On the grid, each tile shows its running tally ("BEWARE 3"); the
+            // On the grid, each tile shows its running tally ("NOTICE 3"); the
             // count is dropped once it hits 0 so an untouched tile stays clean.
             var text = label;
             if (_mode == MODE_GRID) {
@@ -668,14 +689,13 @@ class ScoutView extends WatchUi.DataField {
         dc.fillCircle(_w - 12, 12, 5);
     }
 
-    // Bottom strip: vehicles counted this ride and the ground speed of the most
-    // recent one (closing speed plus the rider's own speed), so the radar can be
-    // sanity-checked from the saddle instead of only after the ride. "no radar" is
-    // shown deliberately rather than a zero —
-    // the same distinction the FIT makes, since a disconnected Varia and an
-    // empty road must never look alike.
+    // Bottom strip (SHOW_RADAR_STRIP): ride tally and last-pass ground speed —
+    // shown after a car has already gone by, for checking the count against the
+    // FIT later. Counting and FIT writes always run in writeRadar(). "no radar"
+    // is shown deliberately rather than a zero — the same distinction the FIT
+    // makes, since a disconnected Varia and an empty road must never look alike.
     hidden function drawRadarStrip(dc as Dc, fg as Number, bg as Number) as Void {
-        if (_stripH <= 0) { return; }
+        if (!SHOW_RADAR_STRIP || _stripH <= 0) { return; }
         var y = _gridH + (_stripH / 2);
 
         dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);

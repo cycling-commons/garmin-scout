@@ -13,7 +13,7 @@ record in the FIT file.
   (whichever your device supports and you haven't muted), and the code is written
   to the next record. The tap feedback means you don't have to look down to know
   it landed.
-- Each tile shows its own running tally for the ride ("BEWARE 3"), net of
+- Each tile shows its own running tally for the ride ("NOTICE 3"), net of
   retractions; an untouched tile shows no number. RESUPPLY sums its leaves;
   CLOSURE sums all duration commits. Duration and resupply submenu leaves
   keep their own counts too (e.g. MONTHS `2` on `CLOSED FOR?`; COBBLES on the
@@ -70,6 +70,11 @@ The reference parser is self-contained and needs no Garmin SDK:
 It builds a full binary FIT in memory covering every option and asserts the whole
 pipeline. To eyeball a real ride, open [`tools/fit-viewer.html`](tools/fit-viewer.html)
 in a browser and drop a `.fit` on it.
+
+## Radar tally simulator
+Open [`tools/radar-sim.html`](tools/radar-sim.html) in a browser to queue virtual
+cars, watch them pass, and see the live car count / speed strip update with the
+same 1&nbsp;Hz `VehicleCounter` rule as the head unit and Android app.
 
 ## Docs
 - **Shared (repo root):** [SPEC](../docs/SPEC.md) · [DATA-FORMAT](../docs/DATA-FORMAT.md)

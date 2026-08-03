@@ -286,7 +286,7 @@ const semiToDeg = (s) => s == null ? null : s * (180 / Math.pow(2, 31));
 const fitToDate = (t) => t == null ? null : new Date((t + FIT_EPOCH) * 1000);
 
 // --- poi-tagger specific decoding (must match PoiTaggerView.mc) ---
-const POI_TYPE = { 1: 'BEWARE', 2: 'SCENERY', 3: 'WATER', 4: 'OTHER',
+const POI_TYPE = { 1: 'NOTICE', 2: 'SCENERY', 3: 'WATER', 4: 'OTHER',
                    5: 'CLOSURE', 6: 'SURFACE', 7: 'FOOD', 8: 'MECHANICAL' };
 const POI_COLOR = { 1: '#d1421f', 2: '#2e8b57', 3: '#1e7fc0', 4: '#b58900',
                     5: '#8e44ad', 6: '#8e5a2b', 7: '#e67e22', 8: '#7f8c8d' };
@@ -384,70 +384,85 @@ function buildSurfaceSegments(tags, rideEnd) {
 // Counts vehicles from the per-second radar_count channel.
 //
 // The Varia gives no target ids, so "how many distinct cars" is always an
-// inference. The rule: every increase in simultaneous targets is that many new
-// vehicles arriving. Targets leaving (count falling) are ignored — that's the
-// same car finishing its pass, not a new one.
-//
-// Arrivals are then held for one second and only counted if the radar still
-// sees *something* on the next record. A real car finishing its pass hands the
-// radar over to the car behind it or to the rest of its group, so the count
-// falls to another target; a spurious one-second reading falls back to an empty
-// road. Corroborating on presence rather than on the count holding its level is
-// deliberate — requiring the level to repeat drops the last car of a queue
-// whenever the third arrives in the same second the first clears. This matches
-// the head unit's on-screen tally exactly; see the README.
-//
-// Two consequences worth knowing: a car present for a single second is never
-// counted (indistinguishable from noise), and an arrival in the final record of
-// a ride is dropped, as nothing follows it to corroborate.
-//
-// Still a floor, not an exact figure: it undercounts when one car leaves and
-// another arrives inside the same second. radar_count === null means no radar
-// was tracking, which is NOT the same as an empty road and must never be
-// counted as zero traffic.
+// inference. Rises are ignored. When the count *falls*, credit only if:
+//   stretch ≥2 s, valid previous closing speed, nearest got within 10 m during
+//   the stretch, and previous nearest range was ≤20 m (last second before pass).
+// A mid-range turn-away must not count, and must not hand its closeness to the
+// next car still behind. Matches VehicleCounter / writeRadar; see DATA-FORMAT.md.
 function countVehicles(parsed) {
   const key = findDevKey(parsed.devFields, 'radar_count');
   const nearKey = findDevKey(parsed.devFields, 'radar_near');
   const speedKey = findDevKey(parsed.devFields, 'radar_speed');
   if (!key) return null;
 
+  const PASS_CONFIRM_M = 10;
+  const PASS_LEAVE_MAX_M = 20;
   let total = 0, prev = 0, covered = 0, records = 0, maxConcurrent = 0;
-  const passes = [];      // one entry per confirmed arrival, in arrival order
-  let pending = [];       // arrivals from the previous record, awaiting proof
+  const passes = [];
+  let prevSp = null;
+  let prevNear = null;
+  let prevRider = null;
+  let prevTime = null;
+  let prevLat = null;
+  let prevLon = null;
+  let stretch = 0;
+  let minRange = Infinity;
   for (const m of parsed.messages) {
     if (m.globalNum !== MESG.RECORD) continue;
     records++;
     const c = m.devFields[key];
-    // Radar not tracking: no evidence either way, so a held arrival is dropped
-    // rather than confirmed across a gap of unknown length.
-    if (c == null) { prev = 0; pending = []; continue; }
+    if (c == null) {
+      prev = 0; stretch = 0; minRange = Infinity;
+      prevSp = null; prevNear = null; prevRider = null;
+      prevTime = null; prevLat = null; prevLon = null;
+      continue;
+    }
     covered++;
     if (c > maxConcurrent) maxConcurrent = c;
 
-    // A target is still there, so last second's arrivals were real. They keep
-    // their own timestamp and position — the moment of arrival is the useful
-    // one, not the moment it was confirmed.
-    if (pending.length && c > 0) {
-      total += pending.length;
-      for (const p of pending) passes.push(p);
-    }
-    pending = [];
+    const spNow = speedKey ? m.devFields[speedKey] : null;
+    const nearNow = nearKey ? m.devFields[nearKey] : null;
+    const riderRaw = m.fields[73] != null ? m.fields[73] : m.fields[6];
+    const riderNow = riderRaw != null ? Math.round(riderRaw / 1000 * 3.6) : null;
 
-    if (c > prev) {
-      const sp = speedKey ? m.devFields[speedKey] : null;
-      const near = nearKey ? m.devFields[nearKey] : null;
-      // Radar reports CLOSING speed (car minus bike). Adding the rider's own
-      // ground speed at this record recovers the car's approximate ground speed
-      // — FIT record speed (field 6) is mm/s-scaled (raw / 1000 = m/s).
-      const riderRaw = m.fields[73] != null ? m.fields[73] : m.fields[6];  // enhanced_speed, else speed
-      const rider = riderRaw != null ? Math.round(riderRaw / 1000 * 3.6) : null;
-      const ground = (sp != null && rider != null) ? sp + rider : null;
-      for (let i = 0; i < c - prev; i++) {
-        pending.push({ time: fitToDate(m.fields[253]), speed: sp, range: near,
-                       riderSpeed: rider, ground: ground,
-                       lat: semiToDeg(m.fields[0]), lon: semiToDeg(m.fields[1]) });
+    const leaveOk =
+      c < prev &&
+      stretch >= 2 &&
+      prevSp != null && prevSp !== 255 &&
+      minRange <= PASS_CONFIRM_M &&
+      prevNear != null && prevNear !== 255 && prevNear <= PASS_LEAVE_MAX_M;
+    if (leaveOk) {
+      const departed = prev - c;
+      total += departed;
+      const ground = (prevRider != null) ? prevSp + prevRider : null;
+      for (let i = 0; i < departed; i++) {
+        passes.push({
+          time: prevTime, speed: prevSp, range: prevNear,
+          riderSpeed: prevRider, ground: ground,
+          lat: prevLat, lon: prevLon,
+        });
       }
     }
+
+    if (c === 0) {
+      stretch = 0;
+      minRange = Infinity;
+    } else {
+      stretch = prev === 0 ? 1 : stretch + 1;
+      if (nearNow != null && nearNow !== 255) {
+        if (c < prev) {
+          minRange = nearNow; // fresh nearest after departure
+        } else if (nearNow < minRange) {
+          minRange = nearNow;
+        }
+      }
+    }
+    prevSp = spNow;
+    prevNear = nearNow;
+    prevRider = riderNow;
+    prevTime = fitToDate(m.fields[253]);
+    prevLat = semiToDeg(m.fields[0]);
+    prevLon = semiToDeg(m.fields[1]);
     prev = c;
   }
   return { total, covered, records, maxConcurrent, passes,
