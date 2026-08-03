@@ -95,6 +95,29 @@ class ScoutFitWriterTest {
         }
     }
 
+    /** Resume after process kill appends to an existing flushed partial file. */
+    @Test
+    fun resumeAppendContinuesPartialFile() {
+        val samples = buildScenario()
+        val tmp = File.createTempFile("scout-resume-", ".fit")
+        try {
+            val partial = samples.take(20)
+            val writer = ScoutFitWriter(tmp)
+            partial.forEach(writer::append)
+            writer.flush()
+            assertEquals(20, writer.recordCount)
+
+            val resumed = ScoutFitWriter(tmp)
+            resumed.resumeAppend(20)
+            samples.drop(20).forEach(resumed::append)
+            resumed.finish()
+            assertEquals(samples.size, resumed.recordCount)
+            assertArrayEquals(ScoutFitWriter.encode(samples), tmp.readBytes())
+        } finally {
+            tmp.delete()
+        }
+    }
+
     /** A flush mid-ride leaves a complete file, so a crash keeps everything logged so far. */
     @Test
     fun midRideFlushLeavesValidFile() {

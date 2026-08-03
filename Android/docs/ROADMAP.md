@@ -13,6 +13,10 @@ noted elsewhere.
 
 ## Recover an interrupted ride on relaunch
 
+**Status:** Shipped (Android). Persists ride state + partial FIT path; offers
+**Resume ride** or **Discard** on cold start. See `RideRecoveryStore`,
+`RecoveryScreen`, and `ScoutFitWriter.resumeAppend`.
+
 **Problem:** If the app process is killed while recording (swipe away, force
 stop, OOM), the partial FIT on disk is flushed only up to the last periodic
 write (~30 s of samples at 1 Hz). The in-memory session is lost; on relaunch

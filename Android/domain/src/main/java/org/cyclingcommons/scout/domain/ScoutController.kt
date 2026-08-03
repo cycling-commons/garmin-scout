@@ -82,6 +82,30 @@ class ScoutController(
         lastFeedback = null
     }
 
+    fun restoreSession(snapshot: RideSessionSnapshot) {
+        timer = snapshot.timer
+        closePage()
+        queue.restore(snapshot.queuedTags)
+        tallies.restore(snapshot.tallies)
+        lastFeedback = null
+    }
+
+    fun sessionSnapshot(
+        elapsedMs: Long,
+        sampleCount: Long,
+        carCount: Int,
+        lastCarSpeedKph: Int,
+    ): RideSessionSnapshot =
+        RideSessionSnapshot(
+            timer = timer,
+            queuedTags = queue.snapshot(),
+            tallies = tallies.snapshot(),
+            elapsedMs = elapsedMs,
+            sampleCount = sampleCount,
+            carCount = carCount,
+            lastCarSpeedKph = lastCarSpeedKph,
+        )
+
     /** Consume pending confirm/undo feedback (null if none since last consume). */
     fun takeFeedback(): TagFeedback? {
         val f = lastFeedback

@@ -1,0 +1,138 @@
+<resources>
+    <string name="app_name">Scout</string>
+    <string name="brand_tagline">Markiere die Fahrt. Baue die Karte.</string>
+
+    <string name="ride_notification_title">Scout-Fahrt</string>
+    <string name="ride_notification_recording">Aufnahme — tippen zum Öffnen</string>
+    <string name="ride_notification_paused">Pausiert — tippen zum Öffnen</string>
+    <string name="channel_ride">Fahrtaufzeichnung</string>
+
+    <!-- Ride screen -->
+    <string name="ride_state_idle">Bereit</string>
+    <string name="ride_state_recording">Aufnahme</string>
+    <string name="ride_state_paused">Pausiert</string>
+    <string name="ride_action_start">Fahrt starten</string>
+    <string name="ride_action_pause">Pause</string>
+    <string name="ride_action_resume">Fortsetzen</string>
+    <string name="ride_action_stop">Stoppen</string>
+    <string name="ride_action_cancel">Abbrechen</string>
+    <string name="ride_stop_confirm_title">Fahrt beenden?</string>
+    <string name="ride_stop_confirm_message">Deine Fahrt wird als FIT-Datei auf diesem Telefon gespeichert.</string>
+    <string name="ride_stop_confirm_action">Fahrt beenden</string>
+    <string name="ride_action_settings">Einstellungen</string>
+    <string name="ride_action_help">So funktioniert Scout</string>
+    <string name="ride_action_share">Letzte Fahrt teilen</string>
+    <string name="ride_permission_needed">Standortberechtigung erforderlich</string>
+    <string name="ride_waiting_for_fix">Warte auf GPS</string>
+    <string name="ride_start_to_tag">Starte deine Fahrt, bevor du Kacheln markieren kannst.</string>
+    <string name="ride_resume_to_tag">Setze deine Fahrt fort, um weiter zu markieren.</string>
+    <string name="ride_gps_ready">GPS bereit</string>
+    <string name="ride_gps_accuracy_m">GPS · ±%1$d m</string>
+    <string name="ride_gps_accuracy_ft">GPS · ±%1$d ft</string>
+    <string name="ride_tags_label">Tags</string>
+    <string name="ride_clock_label">Verstrichen</string>
+    <string name="ride_last_file">Gespeichert %1$s</string>
+    <string name="surface_open_banner">Oberfläche offen: %1$s</string>
+    <string name="surface_open_action">Tippen zum BEENDEN</string>
+
+    <!-- Radar strip -->
+    <string name="radar_label">Radar</string>
+    <string name="radar_none">Kein Radar</string>
+    <string name="radar_ready">Bereit · verbindet beim Start</string>
+    <string name="radar_connecting">Verbinden…</string>
+    <string name="radar_speed_kph">%1$d ±5 km/h</string>
+    <string name="radar_speed_mph">%1$d ±3 mph</string>
+    <plurals name="radar_cars">
+        <item quantity="one">%1$d Auto</item>
+        <item quantity="other">%1$d Autos</item>
+    </plurals>
+
+    <!-- Settings -->
+    <string name="settings_title">Einstellungen</string>
+    <string name="settings_done">Fertig</string>
+    <string name="settings_display">Anzeige</string>
+    <string name="settings_units">Geschwindigkeitseinheiten</string>
+    <string name="settings_units_metric">km/h</string>
+    <string name="settings_units_imperial">mph</string>
+    <string name="settings_appearance">Erscheinungsbild</string>
+    <string name="settings_appearance_hint">Hell liest sich besser in der Sonne; dunkel ist abends angenehmer und spart Akku.</string>
+    <string name="settings_appearance_system">Auto</string>
+    <string name="settings_appearance_light">Hell</string>
+    <string name="settings_appearance_dark">Dunkel</string>
+    <string name="settings_keep_screen_on">Bildschirm während Aufnahme anlassen</string>
+    <string name="settings_keep_screen_on_hint">Aus spart Akku — die Fahrtbenachrichtigung öffnet Scout erneut.</string>
+    <string name="toggle_on">Ein</string>
+    <string name="toggle_off">Aus</string>
+    <string name="settings_radar">Radar</string>
+    <string name="settings_radar_hint">Radar verbraucht extra Strom. ANT+ bevorzugen, wenn das Telefon es unterstützt.</string>
+    <string name="settings_radar_preferred">Bevorzugt: %1$s · %2$s</string>
+    <string name="settings_radar_pair">Radar koppeln / ändern</string>
+    <string name="settings_rides">Fahrten</string>
+    <string name="settings_rides_hint">Auf diesem Telefon gespeichert, bis du sie löschst — jederzeit teilen.</string>
+    <string name="settings_rides_empty">Noch keine Fahrten aufgezeichnet</string>
+    <string name="settings_ride_meta">%1$s · %2$s</string>
+    <string name="settings_share">Teilen</string>
+    <string name="settings_delete">Löschen</string>
+    <string name="settings_about">Über</string>
+    <string name="settings_help">So funktioniert Scout</string>
+    <string name="settings_show_intro">Willkommensbildschirm anzeigen</string>
+    <string name="settings_version">Scout v%1$s · MIT · kein Konto, keine Telemetrie</string>
+
+    <!-- Help (fallback if help.json failed to bundle) -->
+    <string name="help_title_fallback">Hilfe</string>
+    <string name="help_load_failed">Hilfeinhalt fehlt. Kopiere help/help.example.json nach help/help.json und erstelle neu.</string>
+
+    <!-- Pair radar -->
+    <string name="pair_title">Radar koppeln</string>
+    <string name="pair_transport">Transport</string>
+    <string name="pair_transport_auto">Auto</string>
+    <string name="pair_transport_ant">ANT+</string>
+    <string name="pair_transport_ble">Bluetooth</string>
+    <string name="pair_ant_available">ANT+-Hardware verfügbar</string>
+    <string name="pair_ant_missing">Keine ANT+-Hardware gefunden</string>
+    <string name="pair_need_bluetooth_permission">Bluetooth-Berechtigung für BLE erforderlich</string>
+    <string name="pair_need_bluetooth_on">Bluetooth einschalten</string>
+    <string name="pair_need_ant_service">ANT Radio Service installieren oder USB-ANT-Stick verwenden</string>
+    <string name="pair_saved_ready">Gespeichert — verbindet beim Start der Aufnahme</string>
+    <string name="pair_state_absent">Noch kein Radar gekoppelt</string>
+    <string name="pair_state_scanning">Suche nach Geräten…</string>
+    <string name="pair_state_connecting">Verbinden…</string>
+    <string name="pair_state_tracking">Verbunden und aktiv</string>
+    <string name="pair_state_disconnected">Nicht verbunden</string>
+    <string name="pair_saved">%1$s (%2$s)</string>
+    <string name="pair_forget">Vergessen</string>
+    <string name="pair_ant_search">ANT+-Radar suchen</string>
+    <string name="pair_ant_searching">ANT+-Suche…</string>
+    <string name="pair_ble_scan">Bluetooth scannen</string>
+    <string name="pair_ble_scanning">Scannen…</string>
+    <string name="pair_ble_stop">Stopp</string>
+    <string name="pair_exclusive_hint">Trenne das Radar von seiner eigenen App (z. B. Magene Utility), bevor du es hier koppelst.</string>
+    <string name="pair_devices">In der Nähe</string>
+    <string name="pair_devices_empty">Starte einen Scan, um Geräte in der Nähe anzuzeigen</string>
+    <string name="pair_possible_radar">Mögliches Radar</string>
+    <string name="pair_unknown_device">Gerät in der Nähe</string>
+    <string name="pair_signal_dbm">%1$d dBm</string>
+    <string name="pair_signal_paired">gekoppelt</string>
+
+    <!-- Intro -->
+    <string name="intro_powering">die die</string>
+    <string name="intro_point_tag">Tippe auf eine Kachel, um Gefahren, Sperrungen, Oberflächen und Verpflegung auf deiner Fahrt zu markieren.</string>
+    <string name="intro_point_radar">Koppel ein Fahrradradar, um überholenden Verkehr zu protokollieren — optional und aus, bis du es aktivierst.</string>
+    <string name="intro_point_private">Alles bleibt in einer FIT-Datei auf diesem Telefon. Kein Konto, kein Upload — zumindest nicht automatisch.</string>
+    <string name="intro_permissions_title">Berechtigungen</string>
+    <string name="intro_permission_location">Standort (genau): deine GPS-Spur und wo Markierungen auf der Karte landen.</string>
+    <string name="intro_permission_notifications">Benachrichtigungen: der Hinweis auf eine laufende Fahrt.</string>
+    <string name="intro_permission_bluetooth">Geräte in der Nähe: nur wenn du später ein BLE-Radar koppelst — Markieren funktioniert auch ohne.</string>
+    <string name="intro_permissions_when">Android fragt nach dem Tippen auf Los geht\'s. Du kannst das jederzeit in den Systemeinstellungen ändern.</string>
+    <string name="intro_continue">Los geht\'s</string>
+
+    <string name="cd_scout_logo">Scout</string>
+    <string name="cd_cycling_commons_logo">Cycling Commons</string>
+
+    <!-- Ride recovery -->
+    <string name="recovery_title">Unvollständige Fahrt</string>
+    <string name="recovery_message">Scout wurde während der Aufnahme beendet (%1$s verstrichen, %2$d Samples in %3$s). Setze fort oder verwerfe die Teilaufnahme.</string>
+    <string name="recovery_resume">Fahrt fortsetzen</string>
+    <string name="recovery_discard">Teilaufnahme verwerfen</string>
+    <string name="recovery_discard_hint">Verwerfen löscht die unvollständige FIT-Datei auf diesem Telefon.</string>
+</resources>

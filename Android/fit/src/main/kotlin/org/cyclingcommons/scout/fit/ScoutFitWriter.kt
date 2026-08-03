@@ -56,6 +56,25 @@ class ScoutFitWriter(
         return outFile
     }
 
+    /** Re-open a flushed partial FIT and append more records (ride recovery). */
+    fun resumeAppend(existingRecordCount: Int) {
+        if (!outFile.exists() || outFile.length() < HEADER_BYTES.toLong()) {
+            return
+        }
+        val handle = RandomAccessFile(outFile, "rw")
+        handle.seek(4L)
+        val sizeBytes = ByteArray(4)
+        handle.readFully(sizeBytes)
+        dataSize =
+            (sizeBytes[0].toInt() and 0xFF) or
+                ((sizeBytes[1].toInt() and 0xFF) shl 8) or
+                ((sizeBytes[2].toInt() and 0xFF) shl 16) or
+                ((sizeBytes[3].toInt() and 0xFF) shl 24)
+        recordCount = existingRecordCount.coerceAtLeast(0)
+        handle.setLength((HEADER_BYTES + dataSize).toLong())
+        raf = handle
+    }
+
     private fun open(): RandomAccessFile {
         raf?.let { return it }
         outFile.parentFile?.mkdirs()

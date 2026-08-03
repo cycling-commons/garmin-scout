@@ -1,0 +1,138 @@
+<resources>
+    <string name="app_name">Scout</string>
+    <string name="brand_tagline">Marquez la sortie. Construisez la carte.</string>
+
+    <string name="ride_notification_title">Sortie Scout</string>
+    <string name="ride_notification_recording">Enregistrement — appuyez pour ouvrir</string>
+    <string name="ride_notification_paused">En pause — appuyez pour ouvrir</string>
+    <string name="channel_ride">Enregistrement de sortie</string>
+
+    <!-- Ride screen -->
+    <string name="ride_state_idle">Prêt</string>
+    <string name="ride_state_recording">Enregistrement</string>
+    <string name="ride_state_paused">En pause</string>
+    <string name="ride_action_start">Démarrer</string>
+    <string name="ride_action_pause">Pause</string>
+    <string name="ride_action_resume">Reprendre</string>
+    <string name="ride_action_stop">Arrêter</string>
+    <string name="ride_action_cancel">Annuler</string>
+    <string name="ride_stop_confirm_title">Arrêter la sortie ?</string>
+    <string name="ride_stop_confirm_message">Votre sortie sera enregistrée en fichier FIT sur ce téléphone.</string>
+    <string name="ride_stop_confirm_action">Arrêter la sortie</string>
+    <string name="ride_action_settings">Paramètres</string>
+    <string name="ride_action_help">Comment Scout fonctionne</string>
+    <string name="ride_action_share">Partager la dernière sortie</string>
+    <string name="ride_permission_needed">Autorisation de localisation requise</string>
+    <string name="ride_waiting_for_fix">En attente du GPS</string>
+    <string name="ride_start_to_tag">Démarrez votre sortie avant de pouvoir marquer des tuiles.</string>
+    <string name="ride_resume_to_tag">Reprenez votre sortie pour continuer à marquer.</string>
+    <string name="ride_gps_ready">GPS prêt</string>
+    <string name="ride_gps_accuracy_m">GPS · ±%1$d m</string>
+    <string name="ride_gps_accuracy_ft">GPS · ±%1$d pi</string>
+    <string name="ride_tags_label">Tags</string>
+    <string name="ride_clock_label">Écoulé</string>
+    <string name="ride_last_file">Enregistré %1$s</string>
+    <string name="surface_open_banner">Surface ouverte : %1$s</string>
+    <string name="surface_open_action">Appuyez pour TERMINER</string>
+
+    <!-- Radar strip -->
+    <string name="radar_label">Radar</string>
+    <string name="radar_none">Pas de radar</string>
+    <string name="radar_ready">Prêt · se connecte au démarrage</string>
+    <string name="radar_connecting">Connexion…</string>
+    <string name="radar_speed_kph">%1$d ±5 km/h</string>
+    <string name="radar_speed_mph">%1$d ±3 mph</string>
+    <plurals name="radar_cars">
+        <item quantity="one">%1$d voiture</item>
+        <item quantity="other">%1$d voitures</item>
+    </plurals>
+
+    <!-- Settings -->
+    <string name="settings_title">Paramètres</string>
+    <string name="settings_done">Terminé</string>
+    <string name="settings_display">Affichage</string>
+    <string name="settings_units">Unités de vitesse</string>
+    <string name="settings_units_metric">km/h</string>
+    <string name="settings_units_imperial">mph</string>
+    <string name="settings_appearance">Apparence</string>
+    <string name="settings_appearance_hint">Le mode clair se lit mieux au soleil ; le mode sombre est plus confortable au crépuscule et économise la batterie.</string>
+    <string name="settings_appearance_system">Auto</string>
+    <string name="settings_appearance_light">Clair</string>
+    <string name="settings_appearance_dark">Sombre</string>
+    <string name="settings_keep_screen_on">Garder l\'écran allumé pendant l\'enregistrement</string>
+    <string name="settings_keep_screen_on_hint">Désactivé économise la batterie — la notification de sortie rouvre Scout.</string>
+    <string name="toggle_on">Activé</string>
+    <string name="toggle_off">Désactivé</string>
+    <string name="settings_radar">Radar</string>
+    <string name="settings_radar_hint">Le radar consomme plus d\'énergie. Préférez ANT+ si votre téléphone le prend en charge.</string>
+    <string name="settings_radar_preferred">Préféré : %1$s · %2$s</string>
+    <string name="settings_radar_pair">Associer / changer le radar</string>
+    <string name="settings_rides">Sorties</string>
+    <string name="settings_rides_hint">Conservées sur ce téléphone jusqu\'à suppression — partagez à tout moment.</string>
+    <string name="settings_rides_empty">Aucune sortie enregistrée</string>
+    <string name="settings_ride_meta">%1$s · %2$s</string>
+    <string name="settings_share">Partager</string>
+    <string name="settings_delete">Supprimer</string>
+    <string name="settings_about">À propos</string>
+    <string name="settings_help">Comment Scout fonctionne</string>
+    <string name="settings_show_intro">Afficher l\'écran d\'accueil</string>
+    <string name="settings_version">Scout v%1$s · MIT · pas de compte, pas de télémétrie</string>
+
+    <!-- Help (fallback if help.json failed to bundle) -->
+    <string name="help_title_fallback">Aide</string>
+    <string name="help_load_failed">Le contenu d\'aide est manquant. Copiez help/help.example.json vers help/help.json et recompilez.</string>
+
+    <!-- Pair radar -->
+    <string name="pair_title">Associer un radar</string>
+    <string name="pair_transport">Transport</string>
+    <string name="pair_transport_auto">Auto</string>
+    <string name="pair_transport_ant">ANT+</string>
+    <string name="pair_transport_ble">Bluetooth</string>
+    <string name="pair_ant_available">Matériel ANT+ disponible</string>
+    <string name="pair_ant_missing">Aucun matériel ANT+ trouvé</string>
+    <string name="pair_need_bluetooth_permission">Autorisation Bluetooth requise pour le BLE</string>
+    <string name="pair_need_bluetooth_on">Activez le Bluetooth</string>
+    <string name="pair_need_ant_service">Installez ANT Radio Service ou utilisez une clé ANT USB</string>
+    <string name="pair_saved_ready">Enregistré — se connecte au démarrage de l\'enregistrement</string>
+    <string name="pair_state_absent">Aucun radar associé</string>
+    <string name="pair_state_scanning">Recherche d\'appareils…</string>
+    <string name="pair_state_connecting">Connexion…</string>
+    <string name="pair_state_tracking">Connecté et en suivi</string>
+    <string name="pair_state_disconnected">Non connecté</string>
+    <string name="pair_saved">%1$s (%2$s)</string>
+    <string name="pair_forget">Oublier</string>
+    <string name="pair_ant_search">Rechercher un radar ANT+</string>
+    <string name="pair_ant_searching">Recherche ANT+…</string>
+    <string name="pair_ble_scan">Scanner le Bluetooth</string>
+    <string name="pair_ble_scanning">Analyse…</string>
+    <string name="pair_ble_stop">Arrêter</string>
+    <string name="pair_exclusive_hint">Déconnectez le radar de son application (ex. Magene Utility) avant de l\'associer ici.</string>
+    <string name="pair_devices">À proximité</string>
+    <string name="pair_devices_empty">Lancez une analyse pour lister les appareils à proximité</string>
+    <string name="pair_possible_radar">Radar possible</string>
+    <string name="pair_unknown_device">Appareil à proximité</string>
+    <string name="pair_signal_dbm">%1$d dBm</string>
+    <string name="pair_signal_paired">associé</string>
+
+    <!-- Intro -->
+    <string name="intro_powering">qui alimente</string>
+    <string name="intro_point_tag">Appuyez sur une tuile pour marquer dangers, fermetures, surfaces et ravitaillement sur votre sortie.</string>
+    <string name="intro_point_radar">Associez un radar vélo pour enregistrer les dépassements — optionnel, et désactivé jusqu\'à activation.</string>
+    <string name="intro_point_private">Tout reste dans un fichier FIT sur ce téléphone. Pas de compte, pas d\'envoi — du moins pas automatiquement.</string>
+    <string name="intro_permissions_title">Autorisations</string>
+    <string name="intro_permission_location">Localisation (précise) : votre trace GPS et l\'emplacement des marqueurs sur la carte.</string>
+    <string name="intro_permission_notifications">Notifications : l\'indicateur de sortie en cours.</string>
+    <string name="intro_permission_bluetooth">Appareils à proximité : uniquement si vous associez un radar BLE plus tard — le marquage fonctionne sans.</string>
+    <string name="intro_permissions_when">Android demande cela après avoir appuyé sur Commencer. Vous pouvez modifier ces choix dans les paramètres système.</string>
+    <string name="intro_continue">Commencer</string>
+
+    <string name="cd_scout_logo">Scout</string>
+    <string name="cd_cycling_commons_logo">Cycling Commons</string>
+
+    <!-- Ride recovery -->
+    <string name="recovery_title">Sortie inachevée</string>
+    <string name="recovery_message">Scout s\'est arrêté pendant l\'enregistrement (%1$s écoulé, %2$d échantillons dans %3$s). Reprenez où vous en étiez ou supprimez le fichier partiel.</string>
+    <string name="recovery_resume">Reprendre la sortie</string>
+    <string name="recovery_discard">Supprimer la sortie partielle</string>
+    <string name="recovery_discard_hint">La suppression efface le fichier FIT inachevé sur ce téléphone.</string>
+</resources>

@@ -17,4 +17,14 @@ class TagQueue(private val max: Int = Timings.QUEUE_MAX) {
     fun poll(): QueuedTag? = items.removeFirstOrNull()
 
     fun clear() = items.clear()
+
+    fun snapshot(): List<QueuedTag> = items.toList()
+
+    fun restore(tags: List<QueuedTag>) {
+        items.clear()
+        for (tag in tags) {
+            if (items.size >= max) break
+            items.addLast(tag)
+        }
+    }
 }

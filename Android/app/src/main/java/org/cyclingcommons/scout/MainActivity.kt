@@ -33,6 +33,7 @@ import org.cyclingcommons.scout.domain.TimerState
 import org.cyclingcommons.scout.ui.HelpScreen
 import org.cyclingcommons.scout.ui.IntroScreen
 import org.cyclingcommons.scout.ui.PairRadarScreen
+import org.cyclingcommons.scout.ui.RecoveryScreen
 import org.cyclingcommons.scout.ui.ScoutRideScreen
 import org.cyclingcommons.scout.ui.SettingsScreen
 import org.cyclingcommons.scout.ui.theme.ScoutColors
@@ -77,6 +78,19 @@ class MainActivity : ComponentActivity() {
                                     requestNeededPermissions()
                                 },
                             )
+                            Screen.RECOVERY -> {
+                                val prompt = model.recovery
+                                if (prompt != null) {
+                                    RecoveryScreen(
+                                        prompt = prompt,
+                                        onResume = {
+                                            requestNeededPermissions()
+                                            rideVm.resumeRecoveredRide()
+                                        },
+                                        onDiscard = rideVm::discardRecovery,
+                                    )
+                                }
+                            }
                             Screen.PAIR_RADAR -> PairRadarScreen(
                                 status = model.radar,
                                 onTransport = rideVm::setTransport,

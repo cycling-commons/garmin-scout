@@ -43,6 +43,13 @@ class VehicleCounter {
         pendingRise = 0
         lastCarSpeedKph = -1
     }
+
+    fun restore(carCount: Int, lastCarSpeedKph: Int) {
+        this.carCount = carCount.coerceAtLeast(0)
+        this.lastCarSpeedKph = lastCarSpeedKph
+        prevCount = 0
+        pendingRise = 0
+    }
 }
 
 fun clampRadarByte(v: Int): Int = v.coerceIn(0, 254)

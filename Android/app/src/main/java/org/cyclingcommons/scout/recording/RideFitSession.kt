@@ -24,6 +24,8 @@ import java.util.concurrent.atomic.AtomicInteger
 class RideFitSession(
     context: Context,
     scope: CoroutineScope,
+    existingFile: File? = null,
+    existingRecordCount: Int = 0,
     private val flushEveryRecords: Int = FLUSH_EVERY_RECORDS,
 ) {
     private sealed interface Command {
@@ -33,9 +35,10 @@ class RideFitSession(
     }
 
     private val ridesDir = File(context.filesDir, "rides")
-    val outFile: File = File(ridesDir, "scout-" + stamp() + ".fit")
+    val outFile: File = existingFile ?: File(ridesDir, "scout-" + stamp() + ".fit")
 
-    private val counted = AtomicInteger()
+    private val initialRecordCount = existingRecordCount.coerceAtLeast(0)
+    private val counted = AtomicInteger(initialRecordCount)
     private val commands = Channel<Command>(Channel.UNLIMITED)
 
     /** Samples handed over so far; the worker may still be writing the tail. */
@@ -44,6 +47,9 @@ class RideFitSession(
     init {
         scope.launch(Dispatchers.IO) {
             val writer = ScoutFitWriter(outFile)
+            if (existingFile != null) {
+                writer.resumeAppend(initialRecordCount)
+            }
             var sinceFlush = 0
             for (command in commands) {
                 when (command) {

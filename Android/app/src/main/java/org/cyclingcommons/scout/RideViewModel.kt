@@ -23,6 +23,7 @@ import org.cyclingcommons.scout.recording.RideFile
 import org.cyclingcommons.scout.recording.RideFiles
 import org.cyclingcommons.scout.recording.RideFitSession
 import org.cyclingcommons.scout.recording.RideForegroundService
+import org.cyclingcommons.scout.recording.RideRecoveryStore
 import org.cyclingcommons.scout.R
 import org.cyclingcommons.scout.sensors.LocationSampler
 import org.cyclingcommons.scout.sensors.radar.RadarCoordinator
@@ -35,11 +36,18 @@ import kotlin.math.roundToInt
 
 enum class Screen {
     INTRO,
+    RECOVERY,
     RIDE,
     SETTINGS,
     HELP,
     PAIR_RADAR,
 }
+
+data class RecoveryPrompt(
+    val elapsedLabel: String,
+    val sampleCount: Long,
+    val fitFileName: String,
+)
 
 data class RideUiModel(
     val screen: Screen = Screen.RIDE,
@@ -58,6 +66,7 @@ data class RideUiModel(
     val rides: List<RideFile> = emptyList(),
     /** Transient rider hint (e.g. tapped a tile before recording). */
     val userMessage: String? = null,
+    val recovery: RecoveryPrompt? = null,
 )
 
 /**
@@ -76,12 +85,12 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     private val radar = RadarCoordinator(app)
     private val appPrefs = AppPrefs(app)
     private val feedback = RideFeedback(app)
+    private val recoveryStore = RideRecoveryStore(app)
 
     private var fitSession: RideFitSession? = null
+    private var pendingRecovery: RideRecoveryStore.PendingRecovery? = null
 
-    private val _ui = MutableStateFlow(
-        RideUiModel(screen = if (appPrefs.introSeen) Screen.RIDE else Screen.INTRO),
-    )
+    private val _ui = MutableStateFlow(buildInitialUi(app))
     val ui: StateFlow<RideUiModel> = _ui.asStateFlow()
 
     /** Signals the tick loop to run again; conflated because one wake is enough. */
@@ -232,6 +241,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         if (location.hasPermission()) location.start()
         radar.onRideStart()
         RideForegroundService.sync(getApplication(), TimerState.RUNNING)
+        persistRideState()
         publish()
         wake()
     }
@@ -243,6 +253,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         radar.onRideStop()
         fitSession?.flush()
         RideForegroundService.sync(getApplication(), TimerState.PAUSED)
+        persistRideState()
         publish()
     }
 
@@ -252,6 +263,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         if (location.hasPermission()) location.start()
         radar.onRideStart()
         RideForegroundService.sync(getApplication(), TimerState.RUNNING)
+        persistRideState()
         publish()
         wake()
     }
@@ -263,14 +275,60 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         radar.onRideStop()
         elapsedBeforePauseMs = 0L
         sampleCount = 0L
+        recoveryStore.clear()
         fitSession?.finish { saved ->
             _ui.update { it.copy(lastFitPath = saved?.absolutePath) }
             loadRides()
         }
         fitSession = null
         RideForegroundService.sync(getApplication(), TimerState.IDLE)
-        _ui.update { it.copy(fixLabel = null) }
+        _ui.update { it.copy(fixLabel = null, recovery = null) }
         publish()
+    }
+
+    fun resumeRecoveredRide() {
+        val pending = pendingRecovery ?: return
+        val session = pending.session
+        pendingRecovery = null
+        controller.restoreSession(session)
+        vehicles.restore(session.carCount, session.lastCarSpeedKph)
+        sampleCount = session.sampleCount
+        lastSampleAt = 0L
+        elapsedBeforePauseMs = session.elapsedMs
+        rideStartedAtMs = System.currentTimeMillis()
+        fitSession = RideFitSession(
+            getApplication(),
+            viewModelScope,
+            existingFile = pending.file,
+            existingRecordCount = session.sampleCount.toInt(),
+        )
+        when (session.timer) {
+            TimerState.RUNNING -> {
+                if (location.hasPermission()) location.start()
+                radar.onRideStart()
+                RideForegroundService.sync(getApplication(), TimerState.RUNNING)
+            }
+            TimerState.PAUSED -> {
+                RideForegroundService.sync(getApplication(), TimerState.PAUSED)
+            }
+            TimerState.IDLE -> Unit
+        }
+        persistRideState()
+        _ui.update { it.copy(screen = Screen.RIDE, recovery = null) }
+        publish()
+        wake()
+    }
+
+    fun discardRecovery() {
+        val pending = pendingRecovery
+        pendingRecovery = null
+        recoveryStore.clear()
+        viewModelScope.launch {
+            pending?.file?.let { file ->
+                withContext(Dispatchers.IO) { file.delete() }
+            }
+            _ui.update { it.copy(screen = initialScreenAfterRecovery(), recovery = null) }
+        }
     }
 
     fun onTileTap(index: Int) {
@@ -285,6 +343,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         val now = System.currentTimeMillis()
         controller.onTileTap(index, now)
         controller.takeFeedback()?.let { feedback.confirm(it.undone) }
+        persistRideState()
         publish(now)
         wake()
     }
@@ -309,6 +368,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         val now = System.currentTimeMillis()
         controller.endOpenSurface(now)
         controller.takeFeedback()?.let { feedback.confirm(it.undone) }
+        persistRideState()
         publish(now)
         wake()
     }
@@ -361,6 +421,56 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
             radarSpeed = channels[2],
         )
         sampleCount++
+        persistRideState(nowMs)
+    }
+
+    private fun persistRideState(nowMs: Long = System.currentTimeMillis()) {
+        val timer = controller.timer
+        if (timer == TimerState.IDLE) return
+        val session = fitSession ?: return
+        recoveryStore.save(
+            fitPath = session.outFile.absolutePath,
+            session = controller.sessionSnapshot(
+                elapsedMs = currentElapsedMs(nowMs),
+                sampleCount = sampleCount,
+                carCount = vehicles.carCount,
+                lastCarSpeedKph = vehicles.lastCarSpeedKph,
+            ),
+        )
+    }
+
+    private fun currentElapsedMs(nowMs: Long): Long =
+        when (controller.timer) {
+            TimerState.IDLE -> 0L
+            TimerState.PAUSED -> elapsedBeforePauseMs
+            TimerState.RUNNING -> elapsedBeforePauseMs + (nowMs - rideStartedAtMs)
+        }
+
+    private fun buildInitialUi(app: Application): RideUiModel {
+        pendingRecovery = recoveryStore.load()
+        val recoveryPrompt = pendingRecovery?.let { pending ->
+            RecoveryPrompt(
+                elapsedLabel = formatElapsed(pending.session.elapsedMs),
+                sampleCount = pending.session.sampleCount,
+                fitFileName = pending.file.name,
+            )
+        }
+        val screen = when {
+            recoveryPrompt != null -> Screen.RECOVERY
+            !appPrefs.introSeen -> Screen.INTRO
+            else -> Screen.RIDE
+        }
+        return RideUiModel(screen = screen, recovery = recoveryPrompt)
+    }
+
+    private fun initialScreenAfterRecovery(): Screen =
+        if (appPrefs.introSeen) Screen.RIDE else Screen.INTRO
+
+    private fun formatElapsed(elapsedMs: Long): String {
+        val totalSec = (elapsedMs / 1000L).coerceAtLeast(0L)
+        val minutes = totalSec / 60L
+        val seconds = totalSec % 60L
+        return "%d:%02d".format(minutes, seconds)
     }
 
     private fun publish(nowMs: Long = System.currentTimeMillis()) {

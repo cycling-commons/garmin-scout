@@ -3,10 +3,9 @@ package org.cyclingcommons.scout.ui
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -20,7 +19,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import org.cyclingcommons.scout.R
@@ -32,8 +30,8 @@ import org.cyclingcommons.scout.ui.components.ScoutSection
 import org.cyclingcommons.scout.ui.theme.ScoutColors
 import org.cyclingcommons.scout.ui.theme.ScoutSpacing
 
-/** Floated beside the first paragraph in the Cycling Commons help section. */
-private val HelpCcLogoWidth = 108.dp
+/** Cycling Commons logo height on the help page. */
+private val HelpCcLogoHeight = 120.dp
 
 @Composable
 fun HelpScreen(
@@ -81,7 +79,7 @@ private fun HelpSectionBlock(
         Column(verticalArrangement = Arrangement.spacedBy(ScoutSpacing.md)) {
             val imageKey = section.image
             if (imageKey != null) {
-                HelpSectionFlowingText(imageKey = imageKey, paragraphs = section.body)
+                HelpSectionWithLogo(imageKey = imageKey, paragraphs = section.body)
             } else {
                 section.body.forEach { paragraph ->
                     HelpParagraph(text = paragraph)
@@ -94,9 +92,9 @@ private fun HelpSectionBlock(
     }
 }
 
-/** Logo floated left; first paragraph wraps on the right; rest is full width below. */
+/** Logo centered above section body text. */
 @Composable
-private fun HelpSectionFlowingText(
+private fun HelpSectionWithLogo(
     imageKey: String,
     paragraphs: List<String>,
 ) {
@@ -106,29 +104,26 @@ private fun HelpSectionFlowingText(
     }
     if (paragraphs.isEmpty()) return
 
-    Column(verticalArrangement = Arrangement.spacedBy(ScoutSpacing.md)) {
-        Row(
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(ScoutSpacing.md),
+    ) {
+        Image(
+            painter = painterResource(drawable),
+            contentDescription = stringResource(R.string.cd_cycling_commons_logo),
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(HelpCcLogoHeight),
+        )
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(ScoutSpacing.md),
-            verticalAlignment = Alignment.Top,
+            verticalArrangement = Arrangement.spacedBy(ScoutSpacing.md),
         ) {
-            Image(
-                painter = painterResource(drawable),
-                contentDescription = stringResource(R.string.cd_cycling_commons_logo),
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.width(HelpCcLogoWidth),
-            )
-            Text(
-                text = paragraphs.first(),
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    platformStyle = PlatformTextStyle(includeFontPadding = false),
-                ),
-                color = ScoutColors.TextPrimary,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        paragraphs.drop(1).forEach { paragraph ->
-            HelpParagraph(text = paragraph)
+            paragraphs.forEach { paragraph ->
+                HelpParagraph(text = paragraph)
+            }
         }
     }
 }

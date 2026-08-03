@@ -5,6 +5,40 @@ data class QueuedTag(
     val detail: Int,
 )
 
+/** Serializable tally mirror for ride recovery. */
+data class TagTalliesSnapshot(
+    val counts: IntArray,
+    val closureDetails: IntArray,
+    val surfaceDetails: IntArray,
+    val lastTapType: Int,
+    val lastTapDetail: Int,
+    val lastTapAtMs: Long,
+    val openSurfaceDetail: Int,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is TagTalliesSnapshot) return false
+        return counts.contentEquals(other.counts) &&
+            closureDetails.contentEquals(other.closureDetails) &&
+            surfaceDetails.contentEquals(other.surfaceDetails) &&
+            lastTapType == other.lastTapType &&
+            lastTapDetail == other.lastTapDetail &&
+            lastTapAtMs == other.lastTapAtMs &&
+            openSurfaceDetail == other.openSurfaceDetail
+    }
+
+    override fun hashCode(): Int {
+        var result = counts.contentHashCode()
+        result = 31 * result + closureDetails.contentHashCode()
+        result = 31 * result + surfaceDetails.contentHashCode()
+        result = 31 * result + lastTapType
+        result = 31 * result + lastTapDetail
+        result = 31 * result + lastTapAtMs.hashCode()
+        result = 31 * result + openSurfaceDetail
+        return result
+    }
+}
+
 /**
  * Live tally mirror of the parser undo rule (display only — both taps still enqueue).
  */
@@ -95,5 +129,35 @@ class TagTallies {
         }
         lastTapAtMs = nowMs
         return undone
+    }
+
+    fun snapshot(): TagTalliesSnapshot =
+        TagTalliesSnapshot(
+            counts = counts.copyOf(),
+            closureDetails = closureDetails.copyOf(),
+            surfaceDetails = surfaceDetails.copyOf(),
+            lastTapType = lastTapType,
+            lastTapDetail = lastTapDetail,
+            lastTapAtMs = lastTapAtMs,
+            openSurfaceDetail = openSurfaceDetail,
+        )
+
+    fun restore(snapshot: TagTalliesSnapshot) {
+        counts.fill(0)
+        closureDetails.fill(0)
+        surfaceDetails.fill(0)
+        snapshot.counts.copyInto(counts, endIndex = minOf(snapshot.counts.size, counts.size))
+        snapshot.closureDetails.copyInto(
+            closureDetails,
+            endIndex = minOf(snapshot.closureDetails.size, closureDetails.size),
+        )
+        snapshot.surfaceDetails.copyInto(
+            surfaceDetails,
+            endIndex = minOf(snapshot.surfaceDetails.size, surfaceDetails.size),
+        )
+        lastTapType = snapshot.lastTapType
+        lastTapDetail = snapshot.lastTapDetail
+        lastTapAtMs = snapshot.lastTapAtMs
+        openSurfaceDetail = snapshot.openSurfaceDetail
     }
 }

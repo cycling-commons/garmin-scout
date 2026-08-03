@@ -128,4 +128,11 @@
 
     <string name="cd_scout_logo">Scout</string>
     <string name="cd_cycling_commons_logo">Cycling Commons</string>
+
+    <!-- Ride recovery -->
+    <string name="recovery_title">Unfinished ride</string>
+    <string name="recovery_message">Scout stopped while recording (%1$s elapsed, %2$d samples in %3$s). Resume where you left off or discard the partial file.</string>
+    <string name="recovery_resume">Resume ride</string>
+    <string name="recovery_discard">Discard partial ride</string>
+    <string name="recovery_discard_hint">Discarding deletes the unfinished FIT file on this phone.</string>
 </resources>

@@ -215,6 +215,36 @@ class ScoutControllerTest {
         assertEquals(Surface.END, end.detail)
         assertEquals(Surface.NONE, c.snapshot().openSurfaceDetail)
     }
+
+    @Test
+    fun sessionSnapshotRoundTrip() {
+        val c = ScoutController()
+        c.start()
+        c.onTileTap(0, 1000)
+        c.drainTag()
+        val snap = c.sessionSnapshot(
+            elapsedMs = 42_000L,
+            sampleCount = 7,
+            carCount = 2,
+            lastCarSpeedKph = 35,
+        )
+        val restored = ScoutController()
+        restored.restoreSession(snap)
+        assertEquals(TimerState.RUNNING, restored.timer)
+        assertEquals(1, restored.snapshot().tagTotal)
+        assertEquals(0, restored.queueSize())
+    }
+
+    @Test
+    fun talliesSnapshotRoundTrip() {
+        val t = TagTallies()
+        t.countTap(PoiType.SURFACE, Surface.GRAVEL, 1000)
+        val snap = t.snapshot()
+        val restored = TagTallies()
+        restored.restore(snap)
+        assertEquals(Surface.GRAVEL, restored.openSurfaceDetail)
+        assertEquals(1, restored.surfaceDetailCount(Surface.GRAVEL))
+    }
 }
 
 class VehicleCounterTest {
