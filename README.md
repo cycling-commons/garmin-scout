@@ -30,9 +30,9 @@ root doc (SPEC or DATA-FORMAT).
 | Folder | Status |
 | --- | --- |
 | [Garmin/](Garmin/) | Connect IQ data field (reference implementation, v1.0 shipped) |
-| [Android/](Android/) | Phone app — **v1 phases P0–P5 done** · [setup](Android/docs/SETUP.md) · [permissions](Android/docs/PERMISSIONS.md) · [tech](Android/docs/TECHNICAL.md) · [testing](Android/docs/TESTING.md) |
+| [Android/](Android/) | Phone app · [setup](Android/docs/SETUP.md) · [permissions](Android/docs/PERMISSIONS.md) · [tech](Android/docs/TECHNICAL.md) · [testing](Android/docs/TESTING.md) |
 | [Hammerhead-Karoo/](Hammerhead-Karoo/) | Karoo port — not started |
-| [iPhone/](iPhone/) | iOS port — not started (needs a Mac) |
+| [iPhone/](iPhone/) | iOS port — not started|
 
 Radar pairing policy (all ports): **native ANT+ when available, otherwise
 Bluetooth LE**. See [SPEC §8](docs/SPEC.md#8-radar).
