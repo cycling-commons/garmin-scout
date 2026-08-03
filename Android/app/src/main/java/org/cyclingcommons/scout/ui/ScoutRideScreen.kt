@@ -45,6 +45,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.invisibleToUser
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,6 +77,10 @@ import org.cyclingcommons.scout.ui.theme.ScoutType
 import kotlin.math.ceil
 
 private const val GRID_COLUMNS = 2
+
+private val hideFromA11yTree = Modifier.semantics { invisibleToUser() }
+
+private enum class TileCountdownKind { None, Undo, Confirm }
 
 @Composable
 fun ScoutRideScreen(
@@ -135,6 +149,7 @@ fun ScoutRideScreen(
             counts = scout.tileCounts,
             flashIdx = scout.flashIdx,
             flashUntilMs = scout.flashUntilMs,
+            flashUndoWindow = scout.flashUndoWindow,
             pendingIdx = scout.pendingIdx,
             pendingUntilMs = scout.pendingUntilMs,
             title = scout.title,
@@ -196,6 +211,13 @@ private fun RideHeader(
     onSettings: () -> Unit,
     onHelp: () -> Unit,
 ) {
+    val timerLabel = stringResource(
+        when (timer) {
+            TimerState.IDLE -> R.string.ride_state_idle
+            TimerState.RUNNING -> R.string.ride_state_recording
+            TimerState.PAUSED -> R.string.ride_state_paused
+        },
+    )
     Column(verticalArrangement = Arrangement.spacedBy(ScoutSpacing.sm)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -208,18 +230,14 @@ private fun RideHeader(
             }
             Spacer(Modifier.weight(1f))
             StatusPill(
-                label = stringResource(
-                    when (timer) {
-                        TimerState.IDLE -> R.string.ride_state_idle
-                        TimerState.RUNNING -> R.string.ride_state_recording
-                        TimerState.PAUSED -> R.string.ride_state_paused
-                    },
-                ),
-                // SPEC §7.1: green while writing samples, red whenever we are not.
+                label = timerLabel,
                 dotColor = if (timer == TimerState.RUNNING) {
                     ScoutColors.Recording
                 } else {
                     ScoutColors.Brand
+                },
+                modifier = Modifier.semantics {
+                    contentDescription = timerLabel
                 },
             )
             if (timer == TimerState.IDLE && lastFitPath != null) {
@@ -246,11 +264,20 @@ private fun RideHeader(
                 )
             }
         }
+        val metricsA11y = stringResource(
+            R.string.a11y_ride_status,
+            timerLabel,
+            formatElapsed(elapsedSec),
+            pluralStringResource(R.plurals.a11y_ride_tag_total, tagCount, tagCount),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(ScoutColors.Surface, RoundedCornerShape(ScoutDimens.cardCorner))
-                .padding(horizontal = ScoutSpacing.lg, vertical = ScoutSpacing.md),
+                .padding(horizontal = ScoutSpacing.lg, vertical = ScoutSpacing.md)
+                .semantics(mergeDescendants = true) {
+                    contentDescription = metricsA11y
+                },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Metric(
@@ -299,6 +326,7 @@ private fun Metric(
 ) {
     Column(
         horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start,
+        modifier = Modifier.clearAndSetSemantics { },
     ) {
         Text(
             text = label.uppercase(),
@@ -418,12 +446,20 @@ private fun OpenSurfaceBanner(label: String, onEnd: () -> Unit) {
             }
         }
     }
+    val endA11y = stringResource(R.string.a11y_surface_end_button, label)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(ScoutDimens.tileCorner))
             .background(if (dimmed) ScoutColors.BrandDim else ScoutColors.Brand)
-            .clickable(onClick = onEnd)
+            .clickable(role = Role.Button, onClick = onEnd)
+            .semantics(mergeDescendants = true) {
+                contentDescription = endA11y
+                onClick {
+                    onEnd()
+                    true
+                }
+            }
             .padding(horizontal = ScoutSpacing.lg, vertical = ScoutSpacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(ScoutSpacing.sm),
@@ -432,12 +468,15 @@ private fun OpenSurfaceBanner(label: String, onEnd: () -> Unit) {
             text = stringResource(R.string.surface_open_banner, label),
             style = ScoutType.tileLabel.copy(fontSize = 18.sp),
             color = ScoutColors.TextOnBrand,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .then(hideFromA11yTree),
         )
         Text(
             text = stringResource(R.string.surface_open_action).uppercase(),
             style = ScoutType.overline,
             color = ScoutColors.TextOnBrand,
+            modifier = hideFromA11yTree,
         )
     }
 }
@@ -458,9 +497,31 @@ private fun RadarStrip(
         hasRadar && recording && seeking -> stringResource(R.string.radar_connecting)
         else -> stringResource(R.string.radar_none)
     }
+    val radarA11y = when {
+        live -> {
+            val cars = pluralStringResource(R.plurals.radar_cars, carCount, carCount)
+            if (speedKph >= 0) {
+                val speed = if (imperial) {
+                    stringResource(R.string.radar_speed_mph, (speedKph * MPH_PER_KPH).toInt())
+                } else {
+                    stringResource(R.string.radar_speed_kph, speedKph)
+                }
+                stringResource(R.string.a11y_radar_live_speed, cars, speed)
+            } else {
+                stringResource(R.string.a11y_radar_live, cars)
+            }
+        }
+        else -> stringResource(R.string.a11y_radar_status, detail!!)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .semantics(mergeDescendants = true) {
+                contentDescription = radarA11y
+                if (live) {
+                    liveRegion = LiveRegionMode.Polite
+                }
+            }
             .background(ScoutColors.Surface, RoundedCornerShape(ScoutDimens.cardCorner))
             .border(
                 width = 1.dp,
@@ -520,6 +581,7 @@ private fun TagGrid(
     counts: List<Int>,
     flashIdx: Int,
     flashUntilMs: Long,
+    flashUndoWindow: Boolean,
     pendingIdx: Int,
     pendingUntilMs: Long,
     title: String?,
@@ -530,6 +592,9 @@ private fun TagGrid(
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val needsTick =
         (flashIdx >= 0 && flashUntilMs > nowMs) || (pendingIdx >= 0 && pendingUntilMs > nowMs)
+    LaunchedEffect(flashIdx, flashUntilMs, pendingIdx, pendingUntilMs) {
+        nowMs = System.currentTimeMillis()
+    }
     LaunchedEffect(needsTick, flashUntilMs, pendingUntilMs) {
         while (needsTick) {
             nowMs = System.currentTimeMillis()
@@ -544,12 +609,18 @@ private fun TagGrid(
         verticalArrangement = Arrangement.spacedBy(ScoutSpacing.sm),
     ) {
         if (title != null) {
+            val pickerHeading = stringResource(R.string.a11y_picker_heading, title)
             Text(
                 text = title,
                 style = ScoutType.overline,
                 color = ScoutColors.TextSecondary,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        heading()
+                        contentDescription = pickerHeading
+                    },
             )
         }
         repeat(rows) { row ->
@@ -575,6 +646,12 @@ private fun TagGrid(
                             pendingUntilMs
                         else -> 0L
                     }
+                    val countdownKind = when {
+                        untilMs > 0L && i == flashIdx && flashUndoWindow ->
+                            TileCountdownKind.Undo
+                        untilMs > 0L && i == pendingIdx -> TileCountdownKind.Confirm
+                        else -> TileCountdownKind.None
+                    }
                     TagTile(
                         label = openStretch ?: tile.label,
                         overline = openStretch?.let { tile.label },
@@ -584,6 +661,7 @@ private fun TagGrid(
                         } else {
                             0
                         },
+                        countdownKind = countdownKind,
                         rgb = tile.rgb,
                         filled = lit || openStretch != null,
                         onClick = { onTileTap(i) },
@@ -603,11 +681,18 @@ private fun TagTile(
     overline: String?,
     count: Int,
     countdownSec: Int,
+    countdownKind: TileCountdownKind,
     rgb: Int,
     filled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val a11yLabel = tileContentDescription(
+        label = label,
+        overline = overline,
+        count = count,
+        countdownKind = countdownKind,
+    )
     // Tile hues are normative (SPEC §6.1); only the treatment around them changes.
     val color = Color(0xFF000000.toInt() or (rgb and 0xFFFFFF))
     // Unlit, the hue is a wash over the page, so page ink reads on it either way. Lit,
@@ -623,7 +708,14 @@ private fun TagTile(
             .clip(shape)
             .background(if (filled) color else color.copy(alpha = ScoutColors.tileIdleAlpha))
             .border(width = 2.dp, color = color, shape = shape)
-            .clickable(onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                contentDescription = a11yLabel
+                onClick {
+                    onClick()
+                    true
+                }
+            },
     ) {
         Column(
             modifier = Modifier
@@ -637,6 +729,7 @@ private fun TagTile(
                     text = overline,
                     style = ScoutType.overline,
                     color = content.copy(alpha = 0.75f),
+                    modifier = hideFromA11yTree,
                 )
             }
             Text(
@@ -646,6 +739,7 @@ private fun TagTile(
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
+                modifier = hideFromA11yTree,
             )
         }
         if (count > 0) {
@@ -655,7 +749,8 @@ private fun TagTile(
                 color = content,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(horizontal = ScoutSpacing.md),
+                    .padding(horizontal = ScoutSpacing.md)
+                    .then(hideFromA11yTree),
             )
         }
         if (countdownSec > 0) {
@@ -665,10 +760,37 @@ private fun TagTile(
                 color = content,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(horizontal = ScoutSpacing.md, vertical = ScoutSpacing.sm),
+                    .padding(horizontal = ScoutSpacing.md, vertical = ScoutSpacing.sm)
+                    .then(hideFromA11yTree),
             )
         }
     }
+}
+
+@Composable
+private fun tileContentDescription(
+    label: String,
+    overline: String?,
+    count: Int,
+    countdownKind: TileCountdownKind,
+): String {
+    val parts = mutableListOf<String>()
+    if (overline != null) {
+        parts += stringResource(R.string.a11y_tile_open_surface, label, overline)
+    } else {
+        parts += stringResource(R.string.a11y_tile_tag_button, label)
+    }
+    if (count > 0) {
+        parts += pluralStringResource(R.plurals.a11y_tile_count, count, count)
+    }
+    when (countdownKind) {
+        TileCountdownKind.Undo ->
+            parts += stringResource(R.string.a11y_tile_undo)
+        TileCountdownKind.Confirm ->
+            parts += stringResource(R.string.a11y_tile_confirm)
+        TileCountdownKind.None -> Unit
+    }
+    return parts.joinToString(", ")
 }
 
 /** Ride clock from elapsed seconds. */

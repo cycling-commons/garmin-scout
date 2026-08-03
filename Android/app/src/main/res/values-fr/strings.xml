@@ -35,6 +35,26 @@
     <string name="surface_open_banner">Surface ouverte : %1$s</string>
     <string name="surface_open_action">Appuyez pour TERMINER</string>
 
+    <!-- Ride screen — TalkBack -->
+    <string name="a11y_tile_tag_button">%1$s, bouton de tag</string>
+    <string name="a11y_tile_open_surface">Tronçon ouvert %1$s, bouton de tag %2$s</string>
+    <plurals name="a11y_tile_count">
+        <item quantity="one">%1$d tag sur cette sortie</item>
+        <item quantity="other">%1$d tags sur cette sortie</item>
+    </plurals>
+    <string name="a11y_tile_undo">Appuyez à nouveau pour annuler</string>
+    <string name="a11y_tile_confirm">Appuyez à nouveau pour confirmer</string>
+    <string name="a11y_picker_heading">Sélecteur %1$s</string>
+    <string name="a11y_radar_status">Radar, %1$s</string>
+    <string name="a11y_radar_live">Radar en direct, %1$s</string>
+    <string name="a11y_radar_live_speed">Radar en direct, %1$s, %2$s</string>
+    <string name="a11y_surface_end_button">Surface ouverte %1$s. Terminer le tronçon ouvert, bouton</string>
+    <string name="a11y_ride_status">%1$s. Écoulé %2$s. %3$s.</string>
+    <plurals name="a11y_ride_tag_total">
+        <item quantity="one">%1$d tag</item>
+        <item quantity="other">%1$d tags</item>
+    </plurals>
+
     <!-- Radar strip -->
     <string name="radar_label">Radar</string>
     <string name="radar_none">Pas de radar</string>
@@ -124,6 +144,13 @@
     <string name="intro_permission_notifications">Notifications : l\'indicateur de sortie en cours.</string>
     <string name="intro_permission_bluetooth">Appareils à proximité : uniquement si vous associez un radar BLE plus tard — le marquage fonctionne sans.</string>
     <string name="intro_permissions_when">Android demande cela après avoir appuyé sur Commencer. Vous pouvez modifier ces choix dans les paramètres système.</string>
+    <string name="intro_legal_title">Sécurité &amp; mentions légales</string>
+    <string name="intro_legal_summary">Scout enregistre vos sorties ; ce n\'est pas une navigation ni une protection en cas d\'accident. Votre sortie reste sur cet appareil jusqu\'à ce que vous la partagiez.</string>
+    <string name="intro_legal_privacy">Politique de confidentialité</string>
+    <string name="intro_legal_terms">Conditions d\'utilisation</string>
+    <string name="intro_legal_privacy_url">https://cyclingcommons.org/privacy</string>
+    <string name="intro_legal_terms_url">https://cyclingcommons.org/terms</string>
+    <string name="intro_legal_ack">En appuyant sur Commencer, vous reconnaissez l\'avis de sécurité et les politiques ci-dessus.</string>
     <string name="intro_continue">Commencer</string>
 
     <string name="cd_scout_logo">Scout</string>

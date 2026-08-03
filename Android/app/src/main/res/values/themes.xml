@@ -8,4 +8,12 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
     </style>
+
+    <!-- 288×288 dp splash lockup (mark + Scout); SVG artboard is 288, rasterised at 4× for sharpness. -->
+    <style name="Theme.Scout.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/brand</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/scout_splash_icon</item>
+        <item name="postSplashScreenTheme">@style/Theme.Scout</item>
+        <item name="android:windowBackground">@color/brand</item>
+    </style>
 </resources>

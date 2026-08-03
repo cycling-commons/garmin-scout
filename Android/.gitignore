@@ -7,6 +7,7 @@
 .cxx/
 .kotlin/
 captures/
+tools/node_modules/
 *.apk
 *.aab
 *.ap_

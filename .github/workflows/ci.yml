@@ -27,4 +27,6 @@ jobs:
           java-version: '21'
       - name: Run Gradle unit tests
         working-directory: Android
-        run: ./gradlew :domain:test :fit:test :app:test --no-daemon
+        run: |
+          npm install --prefix tools --no-fund --no-audit
+          ./gradlew :domain:test :fit:test :app:test --no-daemon

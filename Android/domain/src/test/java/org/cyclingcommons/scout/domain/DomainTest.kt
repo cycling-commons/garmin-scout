@@ -251,27 +251,75 @@ class VehicleCounterTest {
     @Test
     fun oneSecondBlipNotCounted() {
         val v = VehicleCounter()
-        v.onSample(true, 1, 20, 20)
-        v.onSample(true, 0, -1, 20)
+        v.onSample(true, 1, 20, 80, 20)
+        v.onSample(true, 0, -1, -1, 20)
         assertEquals(0, v.carCount)
+        assertEquals(-1, v.lastCarSpeedKph)
     }
 
     @Test
-    fun corroboratedArrivalCounts() {
+    fun midRangeTurnAwayNotCounted() {
         val v = VehicleCounter()
-        v.onSample(true, 0, -1, 20)
-        v.onSample(true, 1, 30, 20)
-        v.onSample(true, 1, 28, 20)
+        v.onSample(true, 0, -1, -1, 20)
+        v.onSample(true, 1, 40, 80, 20)
+        v.onSample(true, 1, 38, 70, 20)
+        v.onSample(true, 0, -1, -1, 20) // left while still far
+        assertEquals(0, v.carCount)
+        assertEquals(-1, v.lastCarSpeedKph)
+    }
+
+    @Test
+    fun countAndSpeedOnClosePassTogether() {
+        val v = VehicleCounter()
+        v.onSample(true, 0, -1, -1, 20)
+        v.onSample(true, 1, 40, 80, 20)
+        assertEquals(0, v.carCount)
+        v.onSample(true, 1, 35, 40, 20)
+        v.onSample(true, 1, 25, 8, 20) // within PASS_CONFIRM_M
+        v.onSample(true, 1, 22, 5, 20) // last second before pass, ≤PASS_LEAVE_MAX_M
+        assertEquals(0, v.carCount)
+        v.onSample(true, 0, -1, -1, 20)
+        assertEquals(1, v.carCount)
+        assertEquals(42, v.lastCarSpeedKph) // 22 + 20
+    }
+
+    @Test
+    fun convoySecondTurnsFarAfterFirstPass() {
+        val v = VehicleCounter()
+        // First car closes and passes.
+        v.onSample(true, 0, -1, -1, 0)
+        v.onSample(true, 2, 40, 20, 0)
+        v.onSample(true, 2, 30, 10, 0)
+        v.onSample(true, 1, 35, 60, 0) // first left close; second still far
+        assertEquals(1, v.carCount)
+        // Second turns away far from bike — must not inherit first car's min-range.
+        v.onSample(true, 1, 35, 55, 0)
+        v.onSample(true, 0, -1, -1, 0)
         assertEquals(1, v.carCount)
     }
 
     @Test
-    fun dropoutClearsPending() {
+    fun turnAwayWhileConvoyRemainsNotCounted() {
         val v = VehicleCounter()
-        v.onSample(true, 0, -1, 0)
-        v.onSample(true, 1, 20, 0)
-        v.onSample(false, 0, -1, 0)
-        v.onSample(true, 1, 20, 0)
+        // Nearest approaches to ~25 m then turns; second car still far behind.
+        v.onSample(true, 0, -1, -1, 0)
+        v.onSample(true, 2, 40, 40, 0)
+        v.onSample(true, 2, 35, 25, 0)
+        v.onSample(true, 1, 30, 80, 0) // nearest left mid-range — not a pass
+        assertEquals(0, v.carCount)
+        // Remaining car must still get within 10 m before its leave counts.
+        v.onSample(true, 1, 30, 70, 0)
+        v.onSample(true, 0, -1, -1, 0)
+        assertEquals(0, v.carCount)
+    }
+
+    @Test
+    fun dropoutClearsWithoutCrediting() {
+        val v = VehicleCounter()
+        v.onSample(true, 0, -1, -1, 0)
+        v.onSample(true, 1, 20, 15, 0)
+        v.onSample(true, 1, 18, 10, 0)
+        v.onSample(false, 0, -1, -1, 0)
         assertEquals(0, v.carCount)
     }
 }

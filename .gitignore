@@ -33,6 +33,7 @@ Android/local.properties
 Android/.idea/
 Android/*.iml
 Android/.kotlin/
+Android/tools/node_modules/
 
 # Garmin Connect IQ build output and store working material
 Garmin/bin/

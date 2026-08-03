@@ -167,7 +167,7 @@ writing original FIT when feasible so existing ingest tools keep working.
 | Code | Name | UI label | Grid behaviour |
 | --- | --- | --- | --- |
 | 0 | NONE | — | — |
-| 1 | DANGER | BEWARE | Direct tag |
+| 1 | DANGER | NOTICE¹ | Direct tag |
 | 2 | SCENERY | SCENERY | Direct tag |
 | 3 | WATER | WATER | Resupply leaf |
 | 4 | OTHER | OTHER | Direct tag |
@@ -177,6 +177,9 @@ writing original FIT when feasible so existing ingest tools keep working.
 | 8 | MECHANICAL | REPAIR | Resupply leaf |
 
 UI-only codes (never written): `254` = RESUPPLY folder, `255` = BACK.
+
+¹ Connect IQ tile label is **NOTICE**. FIT `poi_type` name stays `DANGER`
+  (code 1). Android currently still shows **BEWARE**.
 
 ### 5.2 Closure duration (`poi_type == 5`) → `poi_detail`
 
@@ -225,14 +228,16 @@ RESUPPLY is a **menu folder**, not a written code. Leaves are distinct
 ## 6. Interaction model (normative timings)
 
 Primary UI is a **full-screen (or largest practical) touch grid**. Hit testing uses
-the grid area only; a bottom radar strip is readout, not a dead zone that drops
-taps — taps on the strip resolve to the tile above.
+the grid area only. On Connect IQ, an optional bottom strip can show the ride’s
+car tally and last-pass speed (`SHOW_RADAR_STRIP`); default off. Radar is always
+counted and written to FIT either way. When the strip is shown, taps on it
+resolve to the tile above (not a dead zone).
 
 ### 6.1 Main grid (2 columns)
 
 ```
 ┌───────────┬───────────┐
-│  BEWARE  │  CLOSURE  │
+│  NOTICE  │  CLOSURE  │
 ├───────────┼───────────┤
 │ SURFACE  │ RESUPPLY  │
 ├───────────┼───────────┤
@@ -240,11 +245,13 @@ taps — taps on the strip resolve to the tile above.
 └───────────┴───────────┘
 ```
 
+Connect IQ labels above. Android still uses **BEWARE** for type 1.
+
 Tile colours (RGB, for visual parity):
 
 | Tile | Colour |
 | --- | --- |
-| BEWARE | `#D1421F` |
+| NOTICE (Garmin) / BEWARE (Android) | `#D1421F` |
 | CLOSURE | `#8E44AD` |
 | SURFACE | `#8E5A2B` |
 | RESUPPLY | `#1E7FC0` |
@@ -252,7 +259,7 @@ Tile colours (RGB, for visual parity):
 | OTHER | `#B58900` |
 | BACK (pickers) | `#444444` |
 
-### 6.2 Direct tags (BEWARE, SCENERY, OTHER)
+### 6.2 Direct tags (NOTICE, SCENERY, OTHER)
 
 1. Tap → enqueue `(type, detail=0)`, update tallies, haptic/tone confirm.
 2. Tile stays lit for the **undo window** (3 s) as a “tap again to cancel” cue.
@@ -310,7 +317,7 @@ to the file. See also [DATA-FORMAT.md](DATA-FORMAT.md) (Undo).
 
 **Main grid** (when count > 0; untouched tiles show no number):
 
-- Shown as label + count (e.g. `BEWARE` with `3` beneath / beside).
+- Shown as label + count (e.g. `NOTICE` with `3` beneath / beside on Garmin).
 - Counts mirror parser undo: same type within undo window annihilates for
   display; both taps still go to the file.
 - RESUPPLY folder tile shows the **sum** of WATER + FOOD + MECHANICAL.
@@ -341,7 +348,7 @@ change tallies.
 
 | Tag class | Window |
 | --- | --- |
-| Direct (BEWARE, SCENERY, OTHER) | 3 s |
+| Direct (NOTICE / BEWARE, SCENERY, OTHER) | 3 s |
 | Two-tap leaves (CLOSURE, WATER, FOOD, MECHANICAL) | 6 s |
 | SURFACE | **Exempt** — second surface tag is a transition, never an undo |
 
@@ -463,24 +470,24 @@ occupied; its closing speed becomes `radar_speed` (kph, clamped).
 - When TRACKING: show corroborated vehicle tally + last car **ground** speed
   (closing + rider ground speed), unit-aware (kph / mph), with ±5 kph / ±3 mph
   tolerance note (radar quantisation ~3 m/s).
-- Speed appears only after the two-read corroboration gate (same as counting).
+- Count and strip **speed** both commit when the target leaves, from the previous
+  second’s closing reading (last second before pass; stretch ≥2 s). Not on arrival.
 
 ### 8.5 Vehicle counting rule (device mirror + parser)
 
 Shared rule — reference: `countVehicles` / `writeRadar` in the Garmin tree.
 
-1. On an **increase** in simultaneous target count, hold the rise for one second
-   (`pendingRise`); do not credit yet.
-2. Next second: if **any** target is still present (`count > 0`), add
-   `pendingRise` to the ride tally; if the road is empty, discard the rise
-   (false blip).
-3. Falling counts are the same vehicles finishing a pass, not new ones.
-4. Corroborate on **presence**, not on the peak repeating (keeps convoy last-car).
-5. On dropout from TRACKING, clear pending rise and previous count — do not
-   credit across a gap.
-6. Parser additionally drops an arrival in the final second of the file (nothing
-   follows to confirm) and reports `coverage` = fraction of samples with valid
-   radar.
+1. Rising counts are ignored for the tally (cars still approaching).
+2. When count **falls**, credit only if stretch ≥2 s, previous closing speed was
+   valid, nearest got within **10 m** during the stretch, and previous nearest
+   range was **≤20 m** (finishing a pass). Add `(prevCount - count)` and set
+   ground speed from that previous closing reading. After any leave, reset
+   min-range for remaining targets so closeness does not transfer.
+3. A leave that never confirmed within 10 m (turn-away / dropout) or a
+   one-second blip is discarded.
+4. On dropout from TRACKING, clear stretch / held state — do not credit across a gap.
+5. Parser drops cars still present at end of file (never left) and reports
+   `coverage` = fraction of samples with valid radar.
 
 **None of this mutates the file.** The file stays a second-by-second log; counting
 is re-runnable interpretation.

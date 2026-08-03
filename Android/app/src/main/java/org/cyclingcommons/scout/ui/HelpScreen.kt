@@ -4,7 +4,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -30,8 +29,8 @@ import org.cyclingcommons.scout.ui.components.ScoutSection
 import org.cyclingcommons.scout.ui.theme.ScoutColors
 import org.cyclingcommons.scout.ui.theme.ScoutSpacing
 
-/** Cycling Commons logo height on the help page. */
-private val HelpCcLogoHeight = 120.dp
+/** CC wordmark width as a fraction of the content area (25% smaller than full width). */
+private const val CyclingCommonsLogoWidthFraction = 0.75f
 
 @Composable
 fun HelpScreen(
@@ -76,7 +75,7 @@ private fun HelpSectionBlock(
     onOpenLink: (String) -> Unit,
 ) {
     ScoutSection(title = section.heading, titleColor = ScoutColors.Brand) {
-        Column(verticalArrangement = Arrangement.spacedBy(ScoutSpacing.md)) {
+        Column(verticalArrangement = Arrangement.spacedBy(ScoutSpacing.sm)) {
             val imageKey = section.image
             if (imageKey != null) {
                 HelpSectionWithLogo(imageKey = imageKey, paragraphs = section.body)
@@ -107,19 +106,17 @@ private fun HelpSectionWithLogo(
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(ScoutSpacing.md),
     ) {
         Image(
             painter = painterResource(drawable),
             contentDescription = stringResource(R.string.cd_cycling_commons_logo),
-            contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(HelpCcLogoHeight),
+            contentScale = ContentScale.FillWidth,
+            modifier = Modifier.fillMaxWidth(CyclingCommonsLogoWidthFraction),
         )
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(ScoutSpacing.md),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = ScoutSpacing.xs),
         ) {
             paragraphs.forEach { paragraph ->
                 HelpParagraph(text = paragraph)

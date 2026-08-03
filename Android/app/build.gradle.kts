@@ -59,6 +59,51 @@ tasks.register<Copy>("prepareBrandSvg") {
     rename { "scout-logo-white.svg" }
 }
 
+tasks.register("prepareSplashIcon") {
+    val brandDir = File(androidRoot.parentFile, "Brand")
+    val fallbackDir = File(androidRoot, "brand-fallback")
+    val toolsDir = File(androidRoot, "tools")
+    val svgSource = File(brandDir, "Scout-logo-android-splashscreen.svg").takeIf { it.exists() }
+        ?: File(fallbackDir, "Scout-logo-android-splashscreen.svg")
+    val fallbackWebp = File(fallbackDir, "scout_splash_icon.webp")
+    val outFile = layout.buildDirectory.file("generated/brand/res/drawable-nodpi/scout_splash_icon.webp").get().asFile
+
+    inputs.file(svgSource)
+    outputs.file(outFile)
+
+    doLast {
+        outFile.parentFile.mkdirs()
+        fun run(command: List<String>): Int =
+            ProcessBuilder(command)
+                .directory(toolsDir)
+                .redirectErrorStream(true)
+                .start()
+                .waitFor()
+
+        val rendered =
+            try {
+                if (!File(toolsDir, "node_modules/sharp").exists()) {
+                    check(run(listOf("npm", "install", "--no-fund", "--no-audit")) == 0)
+                }
+                run(
+                    listOf(
+                        "node",
+                        "render-splash-icon.mjs",
+                        svgSource.absolutePath,
+                        outFile.absolutePath,
+                    ),
+                ) == 0
+            } catch (_: Exception) {
+                false
+            }
+
+        if (!rendered) {
+            check(fallbackWebp.exists()) { "Failed to render splash icon and no fallback webp found" }
+            fallbackWebp.copyTo(outFile, overwrite = true)
+        }
+    }
+}
+
 tasks.register<Copy>("prepareLegalContent") {
     val override = helpDir.file("legal.json").asFile
     val fallback = helpDir.file("legal.example.json").asFile
@@ -100,8 +145,8 @@ android {
         applicationId = "org.cyclingcommons.scout"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -157,6 +202,7 @@ dependencies {
     androidTestImplementation(composeBom)
 
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
@@ -188,5 +234,12 @@ tasks.withType<Test>().configureEach {
 }
 
 tasks.named("preBuild") {
-    dependsOn("prepareHelpContent", "prepareLegalContent", "prepareInstanceConfig", "prepareBrandAssets", "prepareBrandSvg")
+    dependsOn(
+        "prepareHelpContent",
+        "prepareLegalContent",
+        "prepareInstanceConfig",
+        "prepareBrandAssets",
+        "prepareBrandSvg",
+        "prepareSplashIcon",
+    )
 }

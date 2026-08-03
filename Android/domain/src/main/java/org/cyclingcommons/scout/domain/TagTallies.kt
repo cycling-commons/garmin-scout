@@ -43,6 +43,9 @@ data class TagTalliesSnapshot(
  * Live tally mirror of the parser undo rule (display only — both taps still enqueue).
  */
 class TagTallies {
+    /** 1 normally; [Timings.TALKBACK_TIMEOUT_SCALE] while TalkBack is on. */
+    var timeoutScale: Int = 1
+
     private val counts = IntArray(9) // index = poi_type 1..8
     /** Closure duration buckets (TODAY..UNKNOWN). Codes collide with poi_type. */
     private val closureDetails = IntArray(6) // index = Duration 1..5
@@ -96,7 +99,7 @@ class TagTallies {
         var undone = false
         if (type != PoiType.SURFACE &&
             type == lastTapType &&
-            (nowMs - lastTapAtMs) < undoMsFor(type)
+            (nowMs - lastTapAtMs) < scaledUndoMsFor(type, timeoutScale)
         ) {
             counts[type] = (counts[type] - 1).coerceAtLeast(0)
             if (lastTapType == PoiType.CLOSURE) {

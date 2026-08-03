@@ -35,6 +35,26 @@
     <string name="surface_open_banner">Oppervlak open: %1$s</string>
     <string name="surface_open_action">Tik om te BEËINDIGEN</string>
 
+    <!-- Ride screen — TalkBack -->
+    <string name="a11y_tile_tag_button">%1$s, tagknop</string>
+    <string name="a11y_tile_open_surface">Open stuk %1$s, %2$s tagknop</string>
+    <plurals name="a11y_tile_count">
+        <item quantity="one">%1$d tag deze rit</item>
+        <item quantity="other">%1$d tags deze rit</item>
+    </plurals>
+    <string name="a11y_tile_undo">Tik opnieuw om ongedaan te maken</string>
+    <string name="a11y_tile_confirm">Tik opnieuw om te bevestigen</string>
+    <string name="a11y_picker_heading">%1$s keuze</string>
+    <string name="a11y_radar_status">Radar, %1$s</string>
+    <string name="a11y_radar_live">Radar live, %1$s</string>
+    <string name="a11y_radar_live_speed">Radar live, %1$s, %2$s</string>
+    <string name="a11y_surface_end_button">Oppervlak open %1$s. Open stuk beëindigen, knop</string>
+    <string name="a11y_ride_status">%1$s. Verstreken %2$s. %3$s.</string>
+    <plurals name="a11y_ride_tag_total">
+        <item quantity="one">%1$d tag</item>
+        <item quantity="other">%1$d tags</item>
+    </plurals>
+
     <!-- Radar strip -->
     <string name="radar_label">Radar</string>
     <string name="radar_none">Geen radar</string>
@@ -124,6 +144,13 @@
     <string name="intro_permission_notifications">Meldingen: de indicator voor een actieve rit.</string>
     <string name="intro_permission_bluetooth">Apparaten in de buurt: alleen als je later een BLE-radar koppelt — markeren werkt zonder.</string>
     <string name="intro_permissions_when">Android vraagt dit na je tik op Aan de slag. Je kunt dit altijd wijzigen in systeeminstellingen.</string>
+    <string name="intro_legal_title">Veiligheid &amp; juridisch</string>
+    <string name="intro_legal_summary">Scout is een ritlogger, geen navigatie of crashbescherming. Je rit blijft op dit apparaat tot je hem deelt.</string>
+    <string name="intro_legal_privacy">Privacybeleid</string>
+    <string name="intro_legal_terms">Gebruiksvoorwaarden</string>
+    <string name="intro_legal_privacy_url">https://cyclingcommons.org/privacy</string>
+    <string name="intro_legal_terms_url">https://cyclingcommons.org/terms</string>
+    <string name="intro_legal_ack">Door op Aan de slag te tikken, bevestig je de veiligheidsmededeling en het beleid hierboven.</string>
     <string name="intro_continue">Aan de slag</string>
 
     <string name="cd_scout_logo">Scout</string>

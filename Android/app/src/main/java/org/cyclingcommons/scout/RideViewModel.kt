@@ -2,6 +2,7 @@ package org.cyclingcommons.scout
 
 import android.app.Application
 import android.content.Intent
+import android.view.accessibility.AccessibilityManager
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,8 +16,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import org.cyclingcommons.scout.a11y.isTalkBackActive
 import org.cyclingcommons.scout.domain.ScoutController
 import org.cyclingcommons.scout.domain.ScoutUiState
+import org.cyclingcommons.scout.domain.Timings
 import org.cyclingcommons.scout.domain.TimerState
 import org.cyclingcommons.scout.domain.VehicleCounter
 import org.cyclingcommons.scout.recording.RideFile
@@ -102,8 +105,18 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     private var rideStartedAtMs = 0L
     private var elapsedBeforePauseMs = 0L
 
+    private val accessibilityManager =
+        app.getSystemService(AccessibilityManager::class.java)
+    private val accessibilityListener =
+        AccessibilityManager.AccessibilityStateChangeListener { syncTalkBackTimeouts() }
+    private val touchExplorationListener =
+        AccessibilityManager.TouchExplorationStateChangeListener { syncTalkBackTimeouts() }
+
     init {
         radar.onStatusChanged = ::wake
+        accessibilityManager?.addAccessibilityStateChangeListener(accessibilityListener)
+        accessibilityManager?.addTouchExplorationStateChangeListener(touchExplorationListener)
+        syncTalkBackTimeouts()
         viewModelScope.launch {
             while (isActive) {
                 val now = System.currentTimeMillis()
@@ -146,6 +159,15 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
         wakeSignal.trySend(Unit)
     }
 
+    private fun syncTalkBackTimeouts(nowMs: Long = System.currentTimeMillis()) {
+        val scale = if (getApplication<Application>().isTalkBackActive()) {
+            Timings.TALKBACK_TIMEOUT_SCALE
+        } else {
+            1
+        }
+        controller.setTimeoutScale(scale, nowMs)
+    }
+
     /** Driven by the activity lifecycle: while hidden, only recording keeps ticking. */
     fun setUiVisible(visible: Boolean) {
         uiVisible = visible
@@ -153,6 +175,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun refreshPermissions() {
+        syncTalkBackTimeouts()
         radar.refreshCapabilities()
         _ui.update {
             it.copy(
@@ -409,6 +432,7 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
             tracking = observation.tracking,
             occupiedCount = observation.occupiedCount(),
             nearestClosingKph = observation.nearestClosingKph(),
+            nearestRangeM = observation.nearestRangeM(),
             riderKph = riderKph,
         )
         fitSession?.appendSample(
@@ -532,6 +556,8 @@ class RideViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        accessibilityManager?.removeAccessibilityStateChangeListener(accessibilityListener)
+        accessibilityManager?.removeTouchExplorationStateChangeListener(touchExplorationListener)
         location.stop()
         radar.onRideStop()
         feedback.release()

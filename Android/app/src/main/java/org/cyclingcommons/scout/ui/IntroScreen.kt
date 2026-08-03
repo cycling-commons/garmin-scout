@@ -27,20 +27,28 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 
 import androidx.compose.foundation.shape.CircleShape
-
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 
 import androidx.compose.material3.MaterialTheme
 
 import androidx.compose.material3.Text
 
+import androidx.compose.material3.TextButton
+
 import androidx.compose.runtime.Composable
+
+import androidx.compose.runtime.remember
 
 import androidx.compose.ui.Alignment
 
 import androidx.compose.ui.Modifier
 
+import androidx.compose.ui.draw.clip
+
 import androidx.compose.ui.layout.ContentScale
+
+import androidx.compose.ui.platform.LocalContext
 
 import androidx.compose.ui.res.painterResource
 
@@ -48,10 +56,18 @@ import androidx.compose.ui.res.stringResource
 
 import androidx.compose.ui.text.style.TextAlign
 
+import androidx.compose.ui.text.style.TextDecoration
+
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 import org.cyclingcommons.scout.R
+
+import org.cyclingcommons.scout.help.HelpContent
+
+import org.cyclingcommons.scout.help.HelpLink
+
+import org.cyclingcommons.scout.help.HelpSection
 
 import org.cyclingcommons.scout.ui.components.ScoutButton
 
@@ -65,13 +81,24 @@ import org.cyclingcommons.scout.ui.theme.ScoutSpacing
 
 import org.cyclingcommons.scout.ui.theme.ScoutType
 
+/** CC wordmark width as a fraction of the content area (25% smaller than full width). */
+private const val CyclingCommonsLogoWidthFraction = 0.75f
 
+/** Softens the SVG lockup’s square raster bounds on the intro hero. */
+private val IntroLogoCornerRadius = 8.dp
 
 /** First run only: what Scout does, what it costs, and who it belongs to. */
 
 @Composable
 
-fun IntroScreen(onContinue: () -> Unit) {
+fun IntroScreen(
+    onContinue: () -> Unit,
+    onOpenLink: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val legalSection = remember(context) {
+        HelpContent.loadLegalSections(context).firstOrNull()
+    }
 
     Column(
 
@@ -95,6 +122,7 @@ fun IntroScreen(onContinue: () -> Unit) {
             markSize = 112.dp,
             layout = ScoutLogoLayout.Vertical,
             lockupWidthFraction = 0.56f,
+            modifier = Modifier.clip(RoundedCornerShape(IntroLogoCornerRadius)),
         )
 
         Spacer(Modifier.height(ScoutSpacing.md))
@@ -165,6 +193,10 @@ fun IntroScreen(onContinue: () -> Unit) {
 
         )
 
+        Spacer(Modifier.height(ScoutSpacing.xl))
+
+        IntroLegalBlock(section = legalSection, onOpenLink = onOpenLink)
+
         Spacer(Modifier.height(ScoutSpacing.xxl))
 
         Spacer(Modifier.height(ScoutSpacing.lg))
@@ -182,22 +214,23 @@ fun IntroScreen(onContinue: () -> Unit) {
         Spacer(Modifier.height(ScoutSpacing.md))
 
         Image(
-
             painter = painterResource(R.drawable.logo_cycling_commons),
-
             contentDescription = stringResource(R.string.cd_cycling_commons_logo),
-
-            contentScale = ContentScale.Fit,
-
-            modifier = Modifier
-
-                .fillMaxWidth()
-
-                .height(143.dp),
-
+            contentScale = ContentScale.FillWidth,
+            modifier = Modifier.fillMaxWidth(CyclingCommonsLogoWidthFraction),
         )
 
         Spacer(Modifier.height(ScoutSpacing.xxl))
+
+        Text(
+            text = stringResource(R.string.intro_legal_ack),
+            style = MaterialTheme.typography.bodyMedium,
+            color = ScoutColors.TextSecondary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(Modifier.height(ScoutSpacing.md))
 
         ScoutButton(
 
@@ -215,6 +248,78 @@ fun IntroScreen(onContinue: () -> Unit) {
 
     }
 
+}
+
+
+
+@Composable
+private fun IntroLegalBlock(
+    section: HelpSection?,
+    onOpenLink: (String) -> Unit,
+) {
+    val title = section?.heading ?: stringResource(R.string.intro_legal_title)
+    val body = section?.body.orEmpty()
+    val links = section?.links.orEmpty().ifEmpty {
+        listOf(
+            HelpLink(
+                label = stringResource(R.string.intro_legal_privacy),
+                url = stringResource(R.string.intro_legal_privacy_url),
+            ),
+            HelpLink(
+                label = stringResource(R.string.intro_legal_terms),
+                url = stringResource(R.string.intro_legal_terms_url),
+            ),
+        )
+    }
+
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        color = ScoutColors.TextPrimary,
+        modifier = Modifier.fillMaxWidth(),
+    )
+
+    Spacer(Modifier.height(ScoutSpacing.sm))
+
+    Column(verticalArrangement = Arrangement.spacedBy(ScoutSpacing.sm)) {
+        if (body.isEmpty()) {
+            Text(
+                text = stringResource(R.string.intro_legal_summary),
+                style = MaterialTheme.typography.bodyLarge,
+                color = ScoutColors.TextPrimary,
+            )
+        } else {
+            body.forEach { paragraph ->
+                Text(
+                    text = paragraph,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = ScoutColors.TextPrimary,
+                )
+            }
+        }
+        links.forEach { link ->
+            IntroLegalLinkRow(link = link, onOpenLink = onOpenLink)
+        }
+    }
+}
+
+@Composable
+private fun IntroLegalLinkRow(
+    link: HelpLink,
+    onOpenLink: (String) -> Unit,
+) {
+    TextButton(
+        onClick = { onOpenLink(link.url) },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = link.label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = ScoutColors.Brand,
+            textDecoration = TextDecoration.Underline,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
 
 

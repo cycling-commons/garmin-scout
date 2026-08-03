@@ -128,18 +128,21 @@ that a new car arrived — and sometimes the radar reports a car for a single se
 that was never there at all. Count those and every ride is inflated with cars that
 do not exist.
 
-**The rule: wait one second, then check if anything is still there.**
+**The rule: count and speed when the car finishes a pass.**
 
-When the number of cars goes up, we do not count it yet. We remember it and wait
-one second. Then:
+When targets appear, we do not count yet. When the count **falls**:
 
-- If the radar still sees **any** car, the arrival was real — count it.
-- If the radar now sees **nothing**, it was a false blip — throw it away.
+- If it was in view ≥2 seconds, had a valid closing speed, got within **10 m**
+  at some point in the stretch, and the previous nearest range was **≤20 m**,
+  credit those cars and show that ground speed — same tick (last second before
+  overtake).
+- If it vanished farther out (turn-away, mid-range dropout), throw it away —
+  rear radar has no target ids, so closeness is how we tell a pass from a
+  disappear. After any leave, remaining cars start a fresh closeness history
+  so a departed car’s approach is not reused.
 
-The idea behind it: when a real car finishes overtaking you and drops off the
-radar, there is usually another car behind it, or the same group still in view.
-The radar does not go straight back to empty. A false reading does — it appears
-for one second and then everything is clear again.
+A real overtake closes to a few metres before the target drops. A click-away in
+the simulator at 50–80 m must not move the tally.
 
 **Why not just require the same number twice?** That was the first attempt, and it
 loses cars in a queue. Picture three cars overtaking in a line, where the third
@@ -150,10 +153,9 @@ group that goes missing. Checking that *something* is still there instead of
 checking for the same number fixes this, because the drop from 3 to 2 is another
 car, not an empty road.
 
-**Speed works the same way.** No speed appears from a single reading. Once a car
-has been seen two seconds running, the speed shows and then refreshes every second
-until the car is gone. So the number left on screen is that car's *last* reading —
-taken just as it passed you, which is the moment worth knowing about.
+**Speed is recorded at the end of the pass — with the count.** While a car
+approaches, the strip does not change. When the target leaves, ground speed is
+taken from the previous second and the tally increments on that same update.
 
 The radar reports *closing* speed — the car's speed minus yours — so the strip
 adds your own ground speed back to show the car's actual speed, and follows the
@@ -190,11 +192,12 @@ without reflashing the device. If you change it, change it in **both** places
 and the parser will disagree.
 
 **It only sees behind you.** The count is *vehicles that overtook you* — not
-oncoming, not crossing. For cyclist safety that's arguably the metric that
-matters, but it is not road traffic volume, and it's roughly one direction only.
+oncoming, not crossing. It is not road traffic volume, and it's roughly one
+direction only.
 
-`radar_speed` at the moment of arrival is the interesting safety signal: being
-overtaken at +15 kph is a different event from +60 kph.
+`radar_speed` in the **last second before the car leaves** is the interesting
+figure for a pass: being overtaken at +15 kph is a different event from +60 kph.
+Arrival-time speed is noisier and often incomplete.
 
 ## Undo
 Tap a tile twice within the cancel window and the tag is retracted. The device

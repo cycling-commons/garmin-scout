@@ -35,6 +35,26 @@
     <string name="surface_open_banner">Surface open: %1$s</string>
     <string name="surface_open_action">Tap to END</string>
 
+    <!-- Ride screen — TalkBack -->
+    <string name="a11y_tile_tag_button">%1$s, tag button</string>
+    <string name="a11y_tile_open_surface">Open stretch %1$s, %2$s tag button</string>
+    <plurals name="a11y_tile_count">
+        <item quantity="one">%1$d tag this ride</item>
+        <item quantity="other">%1$d tags this ride</item>
+    </plurals>
+    <string name="a11y_tile_undo">Tap again to undo</string>
+    <string name="a11y_tile_confirm">Tap again to confirm</string>
+    <string name="a11y_picker_heading">%1$s picker</string>
+    <string name="a11y_radar_status">Radar, %1$s</string>
+    <string name="a11y_radar_live">Radar live, %1$s</string>
+    <string name="a11y_radar_live_speed">Radar live, %1$s, %2$s</string>
+    <string name="a11y_surface_end_button">Surface open %1$s. End open stretch, button</string>
+    <string name="a11y_ride_status">%1$s. Elapsed %2$s. %3$s.</string>
+    <plurals name="a11y_ride_tag_total">
+        <item quantity="one">%1$d tag</item>
+        <item quantity="other">%1$d tags</item>
+    </plurals>
+
     <!-- Radar strip -->
     <string name="radar_label">Radar</string>
     <string name="radar_none">No radar</string>
@@ -124,6 +144,13 @@
     <string name="intro_permission_notifications">Notifications: the ride-in-progress indicator while a session is open.</string>
     <string name="intro_permission_bluetooth">Nearby devices: only if you pair a BLE radar later — tagging works without it.</string>
     <string name="intro_permissions_when">Android asks after you tap Get started. You can change these anytime in system Settings.</string>
+    <string name="intro_legal_title">Safety &amp; legal</string>
+    <string name="intro_legal_summary">Scout is a ride logger, not navigation or crash protection. Your ride stays on this device until you share it.</string>
+    <string name="intro_legal_privacy">Privacy policy</string>
+    <string name="intro_legal_terms">Terms of use</string>
+    <string name="intro_legal_privacy_url">https://cyclingcommons.org/privacy</string>
+    <string name="intro_legal_terms_url">https://cyclingcommons.org/terms</string>
+    <string name="intro_legal_ack">By tapping Get started, you acknowledge the safety notice and policies above.</string>
     <string name="intro_continue">Get started</string>
 
     <string name="cd_scout_logo">Scout</string>

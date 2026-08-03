@@ -23,6 +23,8 @@ data class ScoutUiState(
     val tagTotal: Int = 0,
     val flashIdx: Int = -1,
     val flashUntilMs: Long = 0L,
+    /** True while [flashIdx] is lit for an undo window (not a brief confirm flash). */
+    val flashUndoWindow: Boolean = false,
     val pendingIdx: Int = -1,
     /** Deadline for pending submenu pick (CORRECT_MS); 0 when none. */
     val pendingUntilMs: Long = 0L,
@@ -57,9 +59,37 @@ class ScoutController(
 
     private var flashIdx: Int = -1
     private var flashUntilMs: Long = 0L
+    private var flashUndoWindow: Boolean = false
 
     var lastFeedback: TagFeedback? = null
         private set
+
+    private var timeoutScale: Int = 1
+
+    /**
+     * Lengthens undo / picker countdowns (e.g. ×2 while TalkBack is on).
+     * Extends any deadline that is already running when the scale increases.
+     */
+    fun setTimeoutScale(scale: Int, nowMs: Long) {
+        val normalized = scale.coerceAtLeast(1)
+        if (normalized == timeoutScale) return
+        val extending = normalized > timeoutScale
+        timeoutScale = normalized
+        tallies.timeoutScale = normalized
+        if (extending) extendActiveDeadlines(nowMs)
+    }
+
+    private fun extendActiveDeadlines(nowMs: Long) {
+        if (flashUndoWindow && nowMs < flashUntilMs) {
+            flashUntilMs += flashUntilMs - nowMs
+        }
+        if (pendingType != PoiType.NONE && nowMs < pendingUntilMs) {
+            pendingUntilMs += pendingUntilMs - nowMs
+        }
+        if (mode != UiMode.GRID && nowMs < pickUntilMs) {
+            pickUntilMs += pickUntilMs - nowMs
+        }
+    }
 
     fun start() {
         timer = TimerState.RUNNING
@@ -143,6 +173,7 @@ class ScoutController(
             tagTotal = Tiles.grid.sumOf { tallies.tileCount(it.code) },
             flashIdx = if (nowMs < flashUntilMs) flashIdx else -1,
             flashUntilMs = flashUntilMs,
+            flashUndoWindow = nowMs < flashUntilMs && flashUndoWindow,
             pendingIdx = if (pendingType != PoiType.NONE) pendingIdx else -1,
             pendingUntilMs = if (pendingType != PoiType.NONE) pendingUntilMs else 0L,
             parentIdx = parentIdx,
@@ -232,9 +263,10 @@ class ScoutController(
         val undone = tallies.countTap(type, detail, nowMs)
         val lit =
             if (undone || type == PoiType.SURFACE) Timings.FLASH_MS
-            else undoMsFor(type)
+            else scaledUndoMsFor(type, timeoutScale)
         this.flashIdx = flashIdx
         this.flashUntilMs = nowMs + lit
+        this.flashUndoWindow = !undone && type != PoiType.SURFACE
         lastFeedback = TagFeedback(undone, flashIdx, this.flashUntilMs)
         closePage()
     }
@@ -242,7 +274,7 @@ class ScoutController(
     private fun openPage(newMode: UiMode, parent: Int, nowMs: Long) {
         mode = newMode
         parentIdx = parent
-        pickUntilMs = nowMs + Timings.PICK_MS
+        pickUntilMs = nowMs + scaledMs(Timings.PICK_MS, timeoutScale)
         clearPending()
     }
 
@@ -264,6 +296,6 @@ class ScoutController(
         pendingType = type
         pendingDetail = detail
         pendingIdx = idx
-        pendingUntilMs = nowMs + Timings.CORRECT_MS
+        pendingUntilMs = nowMs + scaledMs(Timings.CORRECT_MS, timeoutScale)
     }
 }

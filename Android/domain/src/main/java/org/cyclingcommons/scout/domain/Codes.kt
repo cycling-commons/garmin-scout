@@ -50,6 +50,8 @@ object Timings {
     const val CORRECT_MS = 3_000L
     const val UNDO_MS = 3_000L
     const val QUEUE_MAX = 16
+    /** Multiplier for undo / picker countdowns while TalkBack is on. */
+    const val TALKBACK_TIMEOUT_SCALE = 2
 }
 
 fun undoMsFor(type: Int): Long =
@@ -57,3 +59,7 @@ fun undoMsFor(type: Int): Long =
         PoiType.WATER, PoiType.CLOSURE, PoiType.FOOD, PoiType.MECHANICAL -> Timings.UNDO_MS * 2
         else -> Timings.UNDO_MS
     }
+
+fun scaledMs(baseMs: Long, scale: Int): Long = baseMs * scale.coerceAtLeast(1)
+
+fun scaledUndoMsFor(type: Int, scale: Int): Long = scaledMs(undoMsFor(type), scale)

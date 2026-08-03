@@ -56,6 +56,17 @@ data class RadarObservation(
 
     fun occupiedCount(): Int = targets.count { it.occupied }
 
+    fun nearestRangeM(): Int {
+        var near = Int.MAX_VALUE
+        var found = false
+        for (t in targets) {
+            if (!t.occupied) continue
+            found = true
+            if (t.rangeM < near) near = t.rangeM
+        }
+        return if (found) near else -1
+    }
+
     fun nearestClosingKph(): Int {
         var near = Int.MAX_VALUE
         var kph = -1

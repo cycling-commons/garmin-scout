@@ -226,7 +226,7 @@ Only `TRACKING` writes real `radar_*` values; everything else → `255` (SPEC §
 
 ### Live strip
 
-Same corroboration rule as SPEC / Garmin `writeRadar` (pending rise, presence check). Domain module owns the math; UI only renders.
+Same leave-gate as SPEC / Garmin `writeRadar` (count + speed on pass after ≥2 s). Domain module owns the math; UI only renders.
 
 ---
 

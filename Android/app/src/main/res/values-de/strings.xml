@@ -35,6 +35,26 @@
     <string name="surface_open_banner">Oberfläche offen: %1$s</string>
     <string name="surface_open_action">Tippen zum BEENDEN</string>
 
+    <!-- Ride screen — TalkBack -->
+    <string name="a11y_tile_tag_button">%1$s, Tag-Schaltfläche</string>
+    <string name="a11y_tile_open_surface">Offenes Stück %1$s, %2$s Tag-Schaltfläche</string>
+    <plurals name="a11y_tile_count">
+        <item quantity="one">%1$d Tag in dieser Fahrt</item>
+        <item quantity="other">%1$d Tags in dieser Fahrt</item>
+    </plurals>
+    <string name="a11y_tile_undo">Erneut tippen zum Rückgängigmachen</string>
+    <string name="a11y_tile_confirm">Erneut tippen zum Bestätigen</string>
+    <string name="a11y_picker_heading">%1$s-Auswahl</string>
+    <string name="a11y_radar_status">Radar, %1$s</string>
+    <string name="a11y_radar_live">Radar live, %1$s</string>
+    <string name="a11y_radar_live_speed">Radar live, %1$s, %2$s</string>
+    <string name="a11y_surface_end_button">Oberfläche offen %1$s. Offenes Stück beenden, Schaltfläche</string>
+    <string name="a11y_ride_status">%1$s. Verstrichen %2$s. %3$s.</string>
+    <plurals name="a11y_ride_tag_total">
+        <item quantity="one">%1$d Tag</item>
+        <item quantity="other">%1$d Tags</item>
+    </plurals>
+
     <!-- Radar strip -->
     <string name="radar_label">Radar</string>
     <string name="radar_none">Kein Radar</string>
@@ -124,6 +144,13 @@
     <string name="intro_permission_notifications">Benachrichtigungen: der Hinweis auf eine laufende Fahrt.</string>
     <string name="intro_permission_bluetooth">Geräte in der Nähe: nur wenn du später ein BLE-Radar koppelst — Markieren funktioniert auch ohne.</string>
     <string name="intro_permissions_when">Android fragt nach dem Tippen auf Los geht\'s. Du kannst das jederzeit in den Systemeinstellungen ändern.</string>
+    <string name="intro_legal_title">Sicherheit &amp; Rechtliches</string>
+    <string name="intro_legal_summary">Scout ist ein Fahrtprotokoll, keine Navigation und kein Unfallschutz. Deine Fahrt bleibt auf diesem Gerät, bis du sie teilst.</string>
+    <string name="intro_legal_privacy">Datenschutzerklärung</string>
+    <string name="intro_legal_terms">Nutzungsbedingungen</string>
+    <string name="intro_legal_privacy_url">https://cyclingcommons.org/privacy</string>
+    <string name="intro_legal_terms_url">https://cyclingcommons.org/terms</string>
+    <string name="intro_legal_ack">Mit Tippen auf Los geht\'s bestätigst du den Sicherheitshinweis und die Richtlinien oben.</string>
     <string name="intro_continue">Los geht\'s</string>
 
     <string name="cd_scout_logo">Scout</string>
