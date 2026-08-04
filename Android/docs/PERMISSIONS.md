@@ -1,7 +1,7 @@
 # Scout — Android permissions
 
 What the system dialogs mean, what Scout uses them for, and what to choose.
-Scout records **locally only** — no account, no telemetry, no required network.
+Scout records **locally only** — no account, no analytics, no required network.
 
 | Related doc | Role |
 | --- | --- |

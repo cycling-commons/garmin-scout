@@ -96,7 +96,7 @@
     <string name="settings_about">Over</string>
     <string name="settings_help">Hoe Scout werkt</string>
     <string name="settings_show_intro">Welkomstscherm tonen</string>
-    <string name="settings_version">Scout v%1$s · MIT · geen account, geen telemetrie</string>
+    <string name="settings_version">Scout v%1$s · MIT · geen account, geen analytics</string>
 
     <!-- Help (fallback if help.json failed to bundle) -->
     <string name="help_title_fallback">Help</string>

@@ -96,7 +96,7 @@
     <string name="settings_about">À propos</string>
     <string name="settings_help">Comment Scout fonctionne</string>
     <string name="settings_show_intro">Afficher l\'écran d\'accueil</string>
-    <string name="settings_version">Scout v%1$s · MIT · pas de compte, pas de télémétrie</string>
+    <string name="settings_version">Scout v%1$s · MIT · pas de compte, pas d\'analyse</string>
 
     <!-- Help (fallback if help.json failed to bundle) -->
     <string name="help_title_fallback">Aide</string>

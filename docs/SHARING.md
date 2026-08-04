@@ -320,7 +320,7 @@ These are normative UX, not suggestions.
 
 SPEC §2.4 says the recorder never phones home. That stays true with one
 narrow exception, which this document defines: **a ride the rider explicitly
-shares**. Everything else is unchanged — no telemetry, no analytics, no crash
+shares**. Everything else is unchanged — no analytics, no crash
 reporting, no network in the recording path.
 
 - An uploaded ride is **private to the rider’s account** until they submit it

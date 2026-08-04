@@ -39,7 +39,7 @@ Build & sideload steps are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Getting the tags off your ride
 Scout only *records* into your FIT. It has **no network access** — no account, no
-telemetry, no upload. What happens after the ride is entirely your choice:
+analytics, no upload. What happens after the ride is entirely your choice:
 
 1. **Finish the ride.** Your tags and surface stretches are in the activity's FIT
    file, alongside your normal ride data.

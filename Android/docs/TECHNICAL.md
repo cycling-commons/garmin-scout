@@ -18,7 +18,7 @@ stay in the root docs — do not fork them here. For installing tools, see
 - Multi-hour rides with **battery use as low as practical** on a phone.
 - Original **FIT** output readable by `Garmin/tools/fit-viewer.html` / Atlas ingest.
 - Works with **no radar**; radar via **ANT+ if the device has it, else BLE**.
-- No account, no telemetry, no required network.
+- No account, no analytics, no required network.
 
 ### Non-goals (v1)
 

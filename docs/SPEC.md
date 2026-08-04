@@ -29,7 +29,7 @@ logging rear radar observations into the ride file.
   saw that second. Distinct-vehicle counting is done by interpretation rules,
   not by inventing smarter on-device tracking.
 - Built for the [Cycling Commons Atlas](https://cyclingcommons.org), but the app
-  and its data format stand alone (MIT). No account, no telemetry, no forced
+  and its data format stand alone (MIT). No account, no analytics, no forced
   upload.
 
 **Non-goals (v1 parity):** accounts, cloud sync inside the app, maps while
