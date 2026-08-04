@@ -8,7 +8,8 @@ or a fork under your own name.
 **Versioning:** the Connect IQ *manifest* carries no app version — the version
 string is entered in the store portal at upload time. Track it with semantic
 versioning in [CHANGELOG.md](../CHANGELOG.md) (the source of truth) and bump it on
-every store upload.
+every store upload. When you ship, also tag the commit as **`garmin/vX.Y.Z`**
+(see the root [README](../../README.md#release-tags)).
 
 > **Order of operations for the canonical build: publish, then open-source.** The
 > committed `id` is only protected once the first store upload claims it. Publish

@@ -37,6 +37,25 @@ root doc (SPEC or DATA-FORMAT).
 Radar pairing policy (all ports): **native ANT+ when available, otherwise
 Bluetooth LE**. See [SPEC §8](docs/SPEC.md#8-radar).
 
+## Release tags
+
+Platforms version **independently**. Git tags are prefixed so they never collide:
+
+| Tag | Matches |
+| --- | --- |
+| `android/vX.Y.Z` | `versionName` in `Android/app/build.gradle.kts` |
+| `garmin/vX.Y.Z` | version in [Garmin/CHANGELOG.md](Garmin/CHANGELOG.md) (entered in the Connect IQ store) |
+
+```sh
+git tag -a android/v1.0.2 -m "Android 1.0.2"
+git tag -a garmin/v1.0.1 -m "Connect IQ 1.0.1"
+git push origin android/v1.0.2 garmin/v1.0.1
+```
+
+Legacy unprefixed `v1.0.0` is the first Garmin store release; prefer `garmin/v…`
+going forward. The same commit may carry more than one platform tag if both ship
+from that snapshot.
+
 ## Reference tools
 
 The FIT viewer and parser tests currently live with the Garmin tree (first

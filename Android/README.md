@@ -34,6 +34,12 @@ Phone port of Scout.
 | `fit/` | Original FIT encoder (SPEC sample fields only) |
 | `app/` | Compose UI, GPS, BLE/ANT+ radar, FGS, settings |
 
+## Versioning
+
+`versionName` / `versionCode` live in `app/build.gradle.kts`. On each Play (or
+sideload) release, tag the commit **`android/vX.Y.Z`** to match `versionName`
+(see root [README — Release tags](../README.md#release-tags)).
+
 ## License
 
 [MIT](../LICENSE) © BikeCoders.
