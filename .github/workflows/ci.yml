@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - name: Run parser + E2E tests
         run: node Garmin/tools/test-fit-parser.mjs Garmin/tools/fit-viewer.html
 
@@ -29,4 +29,5 @@ jobs:
         working-directory: Android
         run: |
           npm install --prefix tools --no-fund --no-audit
+          chmod +x gradlew
           ./gradlew :domain:test :fit:test :app:test --no-daemon

@@ -4,3 +4,6 @@
 
 # Node tooling stays LF on disk everywhere — it's run directly, not edited much.
 *.mjs text eol=lf
+
+# Gradle wrapper must stay executable on Unix CI checkouts.
+Android/gradlew text eol=lf
