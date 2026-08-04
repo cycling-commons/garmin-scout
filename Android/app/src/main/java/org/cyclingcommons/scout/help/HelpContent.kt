@@ -13,7 +13,7 @@ data class HelpSection(
     val heading: String,
     val body: List<String>,
     val links: List<HelpLink> = emptyList(),
-    /** Built-in image key, e.g. `cycling_commons` → logo_cycling_commons drawable. */
+    /** Built-in image key, e.g. `instance` → instance_logo drawable. */
     val image: String? = null,
 )
 

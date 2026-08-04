@@ -13,7 +13,7 @@ which Atlas URL a build talks to**.
 | --- | --- | --- | --- |
 | In-app help text & links | `Android/help/help.example.json` | `Android/help/help.json` | yes |
 | Legal / safety overlay | `Android/help/legal.example.json` (empty) | `Android/help/legal.json` | yes |
-| Brand logos (Scout lockup, CC wordmark) | — | `Brand/Scout-logo-white.svg` + exported `.webp` copies | yes |
+| Brand images (placeholders only) | `Android/brand-fallback/*` | `Brand/` overrides — **your** logos | yes |
 | Atlas instance URL & label | `Android/.env.example` | `Android/.env.dev.local` | yes |
 | App package / Play listing | — | change `applicationId`, resources, store assets | yes (+ code) |
 
@@ -79,18 +79,33 @@ Full detail: [`Android/help/README.md`](../Android/help/README.md).
 
 ---
 
-## 2. Brand logos
+## 2. Brand images
 
-Source artwork lives in `Brand/` (gitignored). Gradle task `prepareBrandAssets`
-overrides bundled drawables when these files exist:
+**Official Scout / Cycling Commons / BikeCoders marks are not in this repository.**
+`Android/brand-fallback/` holds **generic placeholders** only so a clean checkout
+builds. Forks and other instances must supply **their own** artwork — do not ship
+BikeCoders or Cycling Commons logos in a store build.
 
-| Brand file | Bundled as | Used for |
-| --- | --- | --- |
-| `Scout-logo-white.svg` | `assets/scout-logo-white.svg` | Welcome screen — copied verbatim from `Brand/` (text as outlines) |
-| `logo-cycling-commons.webp` | `logo_cycling_commons.webp` | Intro “powering” line + help CC section |
+| File name | Put your art in (gitignored) | Committed placeholder | Used for |
+| --- | --- | --- | --- |
+| `splash-icon.svg` | `Brand/splash-icon.svg` | `Android/brand-fallback/splash-icon.svg` | API 31+ system splash |
+| `splash-icon.webp` | (optional) | `…/splash-icon.webp` | if SVG render fails |
+| `welcome-logo.svg` | `Brand/welcome-logo.svg` | `…/welcome-logo.svg` | Welcome / intro lockup |
+| `instance-logo.webp` | `Brand/instance-logo.webp` | `…/instance-logo.webp` | Intro “powering” line + help |
 
-The Scout welcome lockup stays as `Scout-logo-white.svg` with **text converted to
-outlines** in Affinity (or equivalent) — do not rasterize it.
+Gradle prefers `Brand/` over `brand-fallback/`. Details:
+[`Android/brand-fallback/README.md`](../Android/brand-fallback/README.md).
+
+**Splash:** artboard **288×288**, keep important content in the middle ~66%.
+`prepareSplashIcon` rasterises at 4× via `Android/tools/render-splash-icon.mjs`.
+
+**Welcome lockup:** SVG with **text converted to outlines** — do not rely on
+device fonts.
+
+**Instance mark:** e.g. your project wordmark. In help JSON use `"image": "instance"`.
+
+Also replace launcher / in-app vectors under `Android/app/src/main/res/` (e.g.
+`ic_scout_logo.xml`) when rebranding a fork.
 
 ---
 

@@ -74,7 +74,7 @@ enum class ScoutLogoLayout {
     Vertical,
 }
 
-/** Ride header: disc mark + name. Intro: official SVG lockup (`Brand/Scout-logo-white.svg`). */
+/** Ride header: disc mark + name. Intro: SVG lockup (`Brand/welcome-logo.svg`). */
 @Composable
 fun ScoutLogo(
     markSize: Dp,
@@ -116,7 +116,7 @@ fun ScoutLogo(
     }
 }
 
-/** Renders `Brand/Scout-logo-white.svg` verbatim (outlined paths, no font lookup). */
+/** Renders `Brand/welcome-logo.svg` verbatim (outlined paths, no font lookup). */
 @Composable
 private fun ScoutLockupLogo(modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -127,7 +127,7 @@ private fun ScoutLockupLogo(modifier: Modifier = Modifier) {
     }
     AsyncImage(
         model = ImageRequest.Builder(context)
-            .data("file:///android_asset/scout-logo-white.svg")
+            .data("file:///android_asset/welcome-logo.svg")
             .build(),
         imageLoader = imageLoader,
         contentDescription = stringResource(R.string.app_name),

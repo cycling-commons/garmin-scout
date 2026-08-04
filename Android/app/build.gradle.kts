@@ -39,10 +39,10 @@ tasks.register<Copy>("prepareBrandAssets") {
     into(layout.buildDirectory.dir("generated/brand/res/drawable-nodpi"))
 
     listOf(
-        "logo-cycling-commons.webp" to "logo_cycling_commons.webp",
+        "instance-logo.webp" to "instance_logo.webp",
     ).forEach { (brandFile, dest) ->
         val override = File(brandDir, brandFile)
-        val fallback = File(fallbackDir, dest)
+        val fallback = File(fallbackDir, brandFile)
         from(if (override.exists()) override else fallback) {
             rename { dest }
         }
@@ -52,21 +52,23 @@ tasks.register<Copy>("prepareBrandAssets") {
 tasks.register<Copy>("prepareBrandSvg") {
     val brandDir = File(androidRoot.parentFile, "Brand")
     val fallbackDir = File(androidRoot, "brand-fallback")
-    val source = File(brandDir, "Scout-logo-white.svg").takeIf { it.exists() }
-        ?: File(fallbackDir, "Scout-logo-white.svg")
+    val source = File(brandDir, "welcome-logo.svg").takeIf { it.exists() }
+        ?: File(fallbackDir, "welcome-logo.svg")
     from(source)
     into(layout.buildDirectory.dir("generated/brand/assets"))
-    rename { "scout-logo-white.svg" }
+    rename { "welcome-logo.svg" }
 }
 
 tasks.register("prepareSplashIcon") {
     val brandDir = File(androidRoot.parentFile, "Brand")
     val fallbackDir = File(androidRoot, "brand-fallback")
     val toolsDir = File(androidRoot, "tools")
-    val svgSource = File(brandDir, "Scout-logo-android-splashscreen.svg").takeIf { it.exists() }
-        ?: File(fallbackDir, "Scout-logo-android-splashscreen.svg")
-    val fallbackWebp = File(fallbackDir, "scout_splash_icon.webp")
-    val outFile = layout.buildDirectory.file("generated/brand/res/drawable-nodpi/scout_splash_icon.webp").get().asFile
+    // Prefer Brand/splash-icon.svg (gitignored instance art); else generic
+    // brand-fallback placeholders (not Scout / CC marks).
+    val svgSource = File(brandDir, "splash-icon.svg").takeIf { it.exists() }
+        ?: File(fallbackDir, "splash-icon.svg")
+    val fallbackWebp = File(fallbackDir, "splash-icon.webp")
+    val outFile = layout.buildDirectory.file("generated/brand/res/drawable-nodpi/splash_icon.webp").get().asFile
 
     inputs.file(svgSource)
     outputs.file(outFile)

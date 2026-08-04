@@ -214,7 +214,7 @@ fun IntroScreen(
         Spacer(Modifier.height(ScoutSpacing.md))
 
         Image(
-            painter = painterResource(R.drawable.logo_cycling_commons),
+            painter = painterResource(R.drawable.instance_logo),
             contentDescription = stringResource(R.string.cd_cycling_commons_logo),
             contentScale = ContentScale.FillWidth,
             modifier = Modifier.fillMaxWidth(CyclingCommonsLogoWidthFraction),

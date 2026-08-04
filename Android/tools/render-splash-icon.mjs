@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Rasterise Brand/Scout-logo-android-splashscreen.svg for the API 31+ splash icon.
+ * Rasterise Brand/splash-icon.svg (or brand-fallback) for the API 31+ splash icon.
  *
  * Android shows the icon at 288×288 **dp** on screen. The SVG artboard should stay
  * 288×288 (design units); this script outputs a higher-pixel bitmap so phones

@@ -16,8 +16,10 @@ Thumbs.db
 *.der
 developer_key
 
-# Brand / design / store assets (local only; app uses copies under Android/res)
+# Brand / design / store assets (local only; app uses Brand/ overrides or
+# Android/brand-fallback — see docs/CUSTOMIZATION.md)
 Brand/
+Android/tools/splash-preview-*.png
 
 # Instance-specific in-app help (see Android/help/README.md)
 Android/help/help.json

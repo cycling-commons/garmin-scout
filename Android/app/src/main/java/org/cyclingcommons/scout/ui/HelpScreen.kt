@@ -98,7 +98,8 @@ private fun HelpSectionWithLogo(
     paragraphs: List<String>,
 ) {
     val drawable = when (imageKey) {
-        "cycling_commons" -> R.drawable.logo_cycling_commons
+        "cycling_commons" -> R.drawable.instance_logo
+        "instance" -> R.drawable.instance_logo
         else -> return
     }
     if (paragraphs.isEmpty()) return
