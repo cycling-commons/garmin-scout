@@ -40,3 +40,6 @@ Android/tools/node_modules/
 # Garmin Connect IQ build output and store working material
 Garmin/bin/
 Garmin/store/
+
+# Cursor IDE (local only)
+.cursor/

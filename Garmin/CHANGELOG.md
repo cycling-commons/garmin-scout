@@ -4,7 +4,14 @@ Semantic versioning; this file is the source of truth for the version string
 entered in the Connect IQ store at upload time.
 
 ## Unreleased
+
+## 1.1.0 — 2026-08-08
 - Tile label **NOTICE** (was BEWARE); FIT type code 1 stays `DANGER`.
+- **NOTICE** and **SCENERY** detail pickers (two-tap, same flow as closure and
+  surface); timeout commits `UNKNOWN`.
+- Grid layout: **RESUPPLY** top-left, **NOTICE** middle-right (swapped with
+  **RESUPPLY**).
+- Reset live radar car count when a ride starts or ends (not on pause/resume).
 - Optional radar strip via `SHOW_RADAR_STRIP` (default off). Counting and FIT
   `radar_*` fields still run.
 

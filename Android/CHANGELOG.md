@@ -1,0 +1,21 @@
+# Changelog — Scout (Android)
+
+Semantic versioning; `versionName` in `app/build.gradle.kts` is the source of
+truth. Tag releases **`android/vX.Y.Z`** (see root [README](../README.md#release-tags)).
+
+## Unreleased
+
+## 1.1.0 — 2026-08-08
+- Tile label **NOTICE** (was BEWARE); FIT type code 1 stays `DANGER`.
+- **NOTICE** and **SCENERY** detail pickers (two-tap, same flow as closure and
+  surface); timeout commits `UNKNOWN`.
+- Grid layout: **RESUPPLY** top-left, **NOTICE** middle-right (swapped with
+  **RESUPPLY**).
+- Ride recovery persists notice and scenery detail tallies.
+
+## 1.0.2
+- Analytics wording, splash/intro polish, and related fixes.
+
+## 1.0.0
+- First Android release: ride session, tag grid/pickers, GPS, FIT writer, BLE/ANT+
+  radar, settings, export.

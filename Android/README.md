@@ -36,9 +36,10 @@ Phone port of Scout.
 
 ## Versioning
 
-`versionName` / `versionCode` live in `app/build.gradle.kts`. On each Play (or
-sideload) release, tag the commit **`android/vX.Y.Z`** to match `versionName`
-(see root [README — Release tags](../README.md#release-tags)).
+`versionName` / `versionCode` live in `app/build.gradle.kts`; release notes in
+[CHANGELOG.md](CHANGELOG.md). On each Play (or sideload) release, tag the commit
+**`android/vX.Y.Z`** to match `versionName` (see root
+[README — Release tags](../README.md#release-tags)).
 
 ## License
 
