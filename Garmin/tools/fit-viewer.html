@@ -291,6 +291,11 @@ const POI_TYPE = { 1: 'NOTICE', 2: 'SCENERY', 3: 'WATER', 4: 'OTHER',
 const POI_COLOR = { 1: '#d1421f', 2: '#2e8b57', 3: '#1e7fc0', 4: '#b58900',
                     5: '#8e44ad', 6: '#8e5a2b', 7: '#e67e22', 8: '#7f8c8d' };
 const POI_DETAIL = { 1: 'TODAY', 2: 'DAYS', 3: 'WEEKS', 4: 'MONTHS', 5: 'UNKNOWN' };
+// Hazard kind, in poi_detail when poi_type === 1 (DANGER / NOTICE). 0 = legacy / unspecified.
+const POI_DANGER = { 1: 'Potholes', 2: 'Crossing', 3: 'Corner', 4: 'Other', 5: 'Unknown' };
+// Scenery kind, in poi_detail when poi_type === 2 (SCENERY). 0 = legacy / unspecified.
+const POI_SCENERY = { 1: 'Nature', 2: 'History', 3: 'Culture', 4: 'View',
+                      5: 'Architecture', 6: 'Unknown' };
 // Surface type, in poi_detail when poi_type === 6 (SURFACE). Smooth -> rough,
 // aligned to OSM surface= values. 0/absent = unspecified surface point.
 const POI_SURFACE = { 1: 'Asphalt', 2: 'Concrete', 3: 'Paving (klinkers)',
@@ -326,7 +331,7 @@ function findDevKey(devFields, name) {
 // transition, not a retraction (see buildSurfaceSegments). MUST stay in step with
 // undoMsFor() on the device.
 const UNDO_WINDOW_S = 3;
-const SUBITEM_TYPES = new Set([3, 5, 7, 8]); // WATER, CLOSURE, FOOD, MECHANICAL
+const SUBITEM_TYPES = new Set([1, 2, 3, 5, 7, 8]); // DANGER, SCENERY, WATER, CLOSURE, FOOD, MECHANICAL
 const undoWindowFor = (type) => SUBITEM_TYPES.has(type) ? UNDO_WINDOW_S * 2 : UNDO_WINDOW_S;
 
 function applyUndoRule(tags, baseWindowS = UNDO_WINDOW_S) {
@@ -670,6 +675,9 @@ function render(p, file) {
       const name = POI_TYPE[t.type] ?? ('UNKNOWN (' + t.type + ')');
       const color = POI_COLOR[t.type] ?? '#777';
       const detail = (() => {
+        if (t.type === 1) {   // DANGER / NOTICE -> hazard kind
+          return POI_DANGER[t.detail] ?? (t.detail ? 'code ' + t.detail : 'unspecified');
+        }
         if (t.type === 5) {   // CLOSURE -> duration
           return POI_DETAIL[t.detail] ?? (t.detail ? 'code ' + t.detail : '—');
         }
@@ -677,6 +685,9 @@ function render(p, file) {
           if (!POI_SURFACE[t.detail]) return 'unspecified';
           return esc(POI_SURFACE[t.detail]) +
                  (OSM_SURFACE[t.detail] ? ' <code>' + OSM_SURFACE[t.detail] + '</code>' : '');
+        }
+        if (t.type === 2) {   // SCENERY -> kind
+          return POI_SCENERY[t.detail] ?? (t.detail ? 'code ' + t.detail : 'unspecified');
         }
         return t.detail ? '<span class="bad">unexpected ' + t.detail + '</span>' : '—';
       })();

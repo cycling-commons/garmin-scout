@@ -148,6 +148,11 @@ class ScoutController(
         val counts =
             when (mode) {
                 UiMode.GRID -> tiles.map { tallies.tileCount(it.code) }
+                UiMode.NOTICE ->
+                    tiles.map {
+                        if (it.code == PoiType.UI_BACK) 0
+                        else tallies.dangerDetailCount(it.code)
+                    }
                 UiMode.DURATION ->
                     tiles.map {
                         if (it.code == PoiType.UI_BACK) 0
@@ -162,6 +167,11 @@ class ScoutController(
                     tiles.map {
                         if (it.code == PoiType.UI_BACK) 0
                         else tallies.surfaceDetailCount(it.code)
+                    }
+                UiMode.SCENERY ->
+                    tiles.map {
+                        if (it.code == PoiType.UI_BACK) 0
+                        else tallies.sceneryDetailCount(it.code)
                     }
             }
         return ScoutUiState(
@@ -208,8 +218,10 @@ class ScoutController(
         }
         if (nowMs > pickUntilMs) {
             when (mode) {
+                UiMode.NOTICE -> tag(PoiType.DANGER, Danger.UNKNOWN, parentIdx, nowMs)
                 UiMode.DURATION -> tag(PoiType.CLOSURE, Duration.UNKNOWN, parentIdx, nowMs)
                 UiMode.SURFACE -> tag(PoiType.SURFACE, Surface.NONE, parentIdx, nowMs)
+                UiMode.SCENERY -> tag(PoiType.SCENERY, Scenery.UNKNOWN, parentIdx, nowMs)
                 UiMode.RESUPPLY -> closePage()
                 UiMode.GRID -> Unit
             }
@@ -226,16 +238,20 @@ class ScoutController(
 
         when (mode) {
             UiMode.GRID -> when (code) {
+                PoiType.DANGER -> openPage(UiMode.NOTICE, index, nowMs)
                 PoiType.CLOSURE -> openPage(UiMode.DURATION, index, nowMs)
                 PoiType.SURFACE -> openPage(UiMode.SURFACE, index, nowMs)
                 PoiType.UI_RESUPPLY -> openPage(UiMode.RESUPPLY, index, nowMs)
+                PoiType.SCENERY -> openPage(UiMode.SCENERY, index, nowMs)
                 else -> tag(code, Duration.NONE, index, nowMs)
             }
             else -> when (code) {
                 PoiType.UI_BACK -> closePage()
                 else -> when (mode) {
+                    UiMode.NOTICE -> holdPick(PoiType.DANGER, code, index, nowMs)
                     UiMode.DURATION -> holdPick(PoiType.CLOSURE, code, index, nowMs)
                     UiMode.SURFACE -> holdPick(PoiType.SURFACE, code, index, nowMs)
+                    UiMode.SCENERY -> holdPick(PoiType.SCENERY, code, index, nowMs)
                     UiMode.RESUPPLY -> holdPick(code, Duration.NONE, index, nowMs)
                     UiMode.GRID -> Unit
                 }

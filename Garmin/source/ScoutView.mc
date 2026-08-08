@@ -59,6 +59,31 @@ enum {
     SURF_END      = 9    // stretch ends here; road back to normal (untagged)
 }
 
+// Scenery kind, written into "poi_detail" when poi_type == POI_SCENERY. Shares
+// the byte with DUR_* / SURF_* the same way (the reader keys off poi_type).
+// SCEN_NONE is legacy (pre-picker rides) or a timed-out picker with no pick.
+enum {
+    SCEN_NONE    = 0,
+    SCEN_NATURE  = 1,
+    SCEN_HISTORY = 2,
+    SCEN_CULTURE = 3,
+    SCEN_VIEW    = 4,
+    SCEN_ARCH    = 5,   // architecture — shortened for the tile
+    SCEN_UNKNOWN = 6
+}
+
+// Hazard kind, written into "poi_detail" when poi_type == POI_DANGER. Shares the
+// byte with the other detail enums the same way (the reader keys off poi_type).
+// DANG_NONE is legacy (pre-picker rides) or a timed-out picker with no pick.
+enum {
+    DANG_NONE     = 0,
+    DANG_POTHOLES = 1,
+    DANG_CROSSING = 2,
+    DANG_CORNER   = 3,
+    DANG_OTHER    = 4,
+    DANG_UNKNOWN  = 5
+}
+
 // Tiles that only steer the UI. Never written to the FIT, so they sit at the
 // top of the byte range, clear of every real code above.
 enum {
@@ -70,7 +95,9 @@ enum {
     MODE_GRID     = 0,
     MODE_DURATION = 1,
     MODE_RESUPPLY = 2,
-    MODE_SURFACE  = 3
+    MODE_SURFACE  = 3,
+    MODE_SCENERY  = 4,
+    MODE_NOTICE   = 5
 }
 
 class ScoutView extends WatchUi.DataField {
@@ -162,14 +189,15 @@ class ScoutView extends WatchUi.DataField {
     hidden var _lastCarSpeed as Number = -1;   // kph, car ground speed, most recent car
     hidden var _riderKph as Number = 0;        // rider ground speed this compute, kph
     hidden var _imperial as Boolean = false;   // display mph, following device settings
+    hidden var _timerState as Number = Activity.TIMER_STATE_OFF;
 
     // Each row is [code as Number, label as String, RGB as Number], laid out
     // left-to-right, top-to-bottom over a COLS-wide grid.
     hidden var _buttons as Array<Array> = [
-        [POI_DANGER,   "NOTICE",   0xD1421F],
+        [UI_RESUPPLY,  "RESUPPLY", 0x1E7FC0],
         [POI_CLOSURE,  "CLOSURE",  0x8E44AD],
         [POI_SURFACE,  "SURFACE",  0x8E5A2B],
-        [UI_RESUPPLY,  "RESUPPLY", 0x1E7FC0],
+        [POI_DANGER,   "NOTICE",   0xD1421F],
         [POI_SCENERY,  "SCENERY",  0x2E8B57],
         [POI_OTHER,    "OTHER",    0xB58900]
     ];
@@ -208,6 +236,24 @@ class ScoutView extends WatchUi.DataField {
         [SURF_SAND,     "SAND",     0xD2B48C],
         [SURF_END,      "END",      0x2E8B57],
         [UI_BACK,       "BACK",     0x444444]
+    ];
+
+    hidden var _scenButtons as Array<Array> = [
+        [SCEN_NATURE,  "NATURE",  0x2E8B57],
+        [SCEN_HISTORY, "HISTORY", 0x8E44AD],
+        [SCEN_CULTURE, "CULTURE", 0xE67E22],
+        [SCEN_VIEW,    "VIEW",    0x1E7FC0],
+        [SCEN_ARCH,    "ARCH",    0xB58900],
+        [SCEN_UNKNOWN, "UNKNOWN", 0x777777],
+        [UI_BACK,      "BACK",    0x444444]
+    ];
+
+    hidden var _noticeButtons as Array<Array> = [
+        [DANG_POTHOLES, "POTHOLES",  0xD1421F],
+        [DANG_CROSSING, "CROSSING",  0xE67E22],
+        [DANG_CORNER,   "CORNER",    0xB58900],
+        [DANG_OTHER,    "OTHER",     0x8E44AD],
+        [UI_BACK,       "BACK",      0x444444]
     ];
 
     function initialize() {
@@ -256,6 +302,7 @@ class ScoutView extends WatchUi.DataField {
     // Called ~once per second. Drains one queued tag onto exactly one record,
     // then falls back to 0 so only tagged records carry a value.
     function compute(info as Activity.Info) as Void {
+        watchTimer(info);
         if (_mode != MODE_GRID) {
             var now = System.getTimer();
             if (_pendingType != POI_NONE) {
@@ -279,6 +326,12 @@ class ScoutView extends WatchUi.DataField {
                     // this keeps the old muscle memory: tap SURFACE, ignore the
                     // picker, still get a tag.
                     tag(POI_SURFACE, SURF_NONE, _parentIdx);
+                } else if (_mode == MODE_SCENERY) {
+                    // The spot is worth recording even without a kind.
+                    tag(POI_SCENERY, SCEN_UNKNOWN, _parentIdx);
+                } else if (_mode == MODE_NOTICE) {
+                    // The hazard is worth recording even without a kind.
+                    tag(POI_DANGER, DANG_UNKNOWN, _parentIdx);
                 } else {
                     // A resupply with no kind says nothing, so drop it.
                     closePage();
@@ -310,6 +363,43 @@ class ScoutView extends WatchUi.DataField {
             _riderKph = 0;
         }
         writeRadar();
+    }
+
+    // Reset live tallies when a ride ends or a fresh one starts. The data field
+    // outlives individual activities, so initialize() is not enough — mirror the
+    // Android resetRide() / controller.stop() behaviour. Pause/resume keeps the
+    // running tally (ON after PAUSED must not clear).
+    hidden function watchTimer(info as Activity.Info) as Void {
+        if (info == null || info.timerState == null) { return; }
+        var next = info.timerState as Number;
+        var prev = _timerState;
+        if (next != prev) {
+            if (next == Activity.TIMER_STATE_ON &&
+                (prev == Activity.TIMER_STATE_OFF || prev == Activity.TIMER_STATE_STOPPED)) {
+                resetRideSession();
+            } else if (prev == Activity.TIMER_STATE_ON &&
+                       (next == Activity.TIMER_STATE_STOPPED || next == Activity.TIMER_STATE_OFF)) {
+                resetRideSession();
+            }
+            _timerState = next;
+        }
+    }
+
+    hidden function resetRideSession() as Void {
+        _carCount = 0;
+        _lastCarSpeed = -1;
+        _prevCount = 0;
+        _heldClosing = -1;
+        _heldRange = -1;
+        _minRange = 10000;
+        _stretchLen = 0;
+        for (var i = 0; i < _counts.size(); i++) {
+            _counts[i] = 0;
+        }
+        _lastTapType = POI_NONE;
+        _lastTapAt = 0;
+        _queue = [];
+        closePage();
     }
 
     // Logs what the radar sees this second and nothing more. Identifying which
@@ -444,6 +534,8 @@ class ScoutView extends WatchUi.DataField {
         if (_mode == MODE_DURATION) { return _durButtons; }
         if (_mode == MODE_RESUPPLY) { return _resButtons; }
         if (_mode == MODE_SURFACE)  { return _surfButtons; }
+        if (_mode == MODE_SCENERY)  { return _scenButtons; }
+        if (_mode == MODE_NOTICE)   { return _noticeButtons; }
         return _buttons;
     }
 
@@ -508,7 +600,7 @@ class ScoutView extends WatchUi.DataField {
     // here — it's a segment channel, exempt from double-tap undo (see countTap).
     // MUST stay in step with undoWindowFor() in the parser.
     hidden function undoMsFor(type as Number) as Number {
-        if (type == POI_WATER || type == POI_CLOSURE ||
+        if (type == POI_DANGER || type == POI_WATER || type == POI_CLOSURE || type == POI_SCENERY ||
             type == POI_FOOD  || type == POI_MECHANICAL) {
             return UNDO_MS * 2;
         }
@@ -604,12 +696,16 @@ class ScoutView extends WatchUi.DataField {
         var code = set[i][0] as Number;
 
         if (_mode == MODE_GRID) {
-            if (code == POI_CLOSURE) {
+            if (code == POI_DANGER) {
+                openPage(MODE_NOTICE, i);       // ask which hazard before tagging
+            } else if (code == POI_CLOSURE) {
                 openPage(MODE_DURATION, i);     // ask how long before tagging
             } else if (code == POI_SURFACE) {
                 openPage(MODE_SURFACE, i);      // ask which surface before tagging
             } else if (code == UI_RESUPPLY) {
                 openPage(MODE_RESUPPLY, i);     // ask which kind; tags nothing
+            } else if (code == POI_SCENERY) {
+                openPage(MODE_SCENERY, i);      // ask which kind before tagging
             } else {
                 tag(code, DUR_NONE, i);
             }
@@ -619,6 +715,10 @@ class ScoutView extends WatchUi.DataField {
             holdPick(POI_CLOSURE, code, i);   // a wrong duration is re-pickable for CORRECT_MS
         } else if (_mode == MODE_SURFACE) {
             holdPick(POI_SURFACE, code, i);   // a wrong surface is re-pickable for CORRECT_MS
+        } else if (_mode == MODE_SCENERY) {
+            holdPick(POI_SCENERY, code, i);   // a wrong kind is re-pickable for CORRECT_MS
+        } else if (_mode == MODE_NOTICE) {
+            holdPick(POI_DANGER, code, i);    // a wrong kind is re-pickable for CORRECT_MS
         } else {
             holdPick(code, DUR_NONE, i);      // resupply leaf (WATER/FOOD/REPAIR)
         }
@@ -669,8 +769,11 @@ class ScoutView extends WatchUi.DataField {
 
         // Surface tiles (ASPHALT, COBBLES, …) name themselves, so that page needs
         // no header; the other pickers keep a prompt.
-        if (_mode == MODE_DURATION || _mode == MODE_RESUPPLY) {
-            var title = (_mode == MODE_DURATION) ? "CLOSED FOR?" : "WHAT KIND?";
+        if (_mode == MODE_DURATION || _mode == MODE_RESUPPLY || _mode == MODE_SCENERY ||
+            _mode == MODE_NOTICE) {
+            var title = (_mode == MODE_DURATION) ? "CLOSED FOR?" :
+                        (_mode == MODE_SCENERY) ? "SCENERY?" :
+                        (_mode == MODE_NOTICE) ? "NOTICE?" : "WHAT KIND?";
             dc.setColor(fg, Graphics.COLOR_TRANSPARENT);
             dc.drawText(_w / 2, 2, Graphics.FONT_TINY, title,
                         Graphics.TEXT_JUSTIFY_CENTER);

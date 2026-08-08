@@ -22,23 +22,25 @@ Everything below is stored as those developer fields on the `record` message.
 
 ## The tags: `poi_type` / `poi_detail`
 
-The watch grid — six tiles, one tap each. Three (★) open a second page
-before they commit; the other three tag on the spot.
+The watch grid — six tiles, one tap each. Five (★) open a second page
+before they commit; the other one tags on the spot.
 
     ┌──────────┬───────────┐
-    │  DANGER  │  CLOSURE ★│
+    │RESUPPLY ★│  CLOSURE ★│
     ├──────────┼───────────┤
-    │ SURFACE ★│ RESUPPLY ★│
+    │ SURFACE ★│ DANGER ★  │
     ├──────────┼───────────┤
-    │  SCENERY │  OTHER    │
+    │ SCENERY ★│  OTHER    │
     └──────────┴───────────┘
 
     ★ second page:
+      DANGER   →  NOTICE?     POTHOLES · CROSSING · CORNER · OTHER
       CLOSURE  →  CLOSED FOR?   TODAY · DAYS · WEEKS · MONTHS · UNKNOWN
       SURFACE  →  WHICH?        ASPHALT · CONCRETE · PAVING · SETT · COBBLES · GRAVEL · DIRT · SAND · END
       RESUPPLY →  WHAT KIND?    WATER · FOOD · REPAIR
+      SCENERY  →  SCENERY?      NATURE · HISTORY · CULTURE · VIEW · ARCH · UNKNOWN
 
-The three pickers look alike but encode differently. CLOSURE and SURFACE each
+The pickers look alike but encode differently. DANGER, CLOSURE, SCENERY, and SURFACE each
 write **one** `poi_type` with a qualifier in `poi_detail`. RESUPPLY is a menu
 folder, not a code — it writes nothing itself; its leaves are **three distinct
 `poi_type`s** (WATER=3, FOOD=7, REPAIR=`MECHANICAL`=8) with `poi_detail` 0, because
@@ -52,22 +54,26 @@ bike shop), not a qualifier on one feature the way a duration or a surface is.
 no qualifier applies. The reader keys off `poi_type`, so the two code sets below
 may overlap numerically.
 
+- `poi_type == 1` (DANGER) — hazard: 1=POTHOLES · 2=CROSSING · 3=CORNER ·
+  4=OTHER · 5=UNKNOWN. 0 = legacy bare tap or unspecified.
 - `poi_type == 5` (CLOSURE) — duration: 1=TODAY · 2=DAYS · 3=WEEKS · 4=MONTHS ·
   5=UNKNOWN.
+- `poi_type == 2` (SCENERY) — kind: 1=NATURE · 2=HISTORY · 3=CULTURE · 4=VIEW ·
+  5=ARCH (architecture) · 6=UNKNOWN. 0 = legacy bare tap or unspecified.
 - `poi_type == 6` (SURFACE) — surface type, smooth→rough, aligned to OSM
   `surface=`: 1=asphalt · 2=concrete · 3=paving_stones · 4=sett ·
   5=cobblestone · 6=gravel · 7=ground (dirt) · 8=sand · **9=END** (stretch ends,
   road back to normal). 0 = unspecified (a bare SURFACE tap or a timed-out picker).
   Surface is recorded as **stretches, not points** (see below).
 
-CLOSURE, SURFACE and RESUPPLY are two-tap: they repaint the field with a follow-up
+CLOSURE, DANGER, SCENERY, SURFACE and RESUPPLY are two-tap: they repaint the field with a follow-up
 page rather than tagging immediately. Both codes land on the *same* record. Picking
 a subitem doesn't commit at once — it's **held for 3 s** and the chosen tile stays
 lit; picking a different subitem in that window replaces it (only the last choice
 is ever written, so a corrected mistake leaves no trace in the FIT). When the 3 s
 lapse the tag is committed, the device beeps, and it drops back to the grid — so
 the fix lands a few seconds past the sign. BACK during the window aborts with no
-tag. With no pick at all, CLOSURE and SURFACE still tag on the 12 s picker timeout
+tag. With no pick at all, DANGER, CLOSURE, SCENERY and SURFACE still tag on the 12 s picker timeout
 (as UNKNOWN / unspecified), since the point is worth recording even without the
 qualifier; RESUPPLY drops, because a resupply with no kind says nothing.
 
@@ -205,8 +211,8 @@ does nothing about this — it queues both taps and writes both to the FIT. The
 *parser* cancels the pair. Tags of any other type never interact, at any
 spacing, so burst-tagging one spot with two categories is unaffected.
 
-The window is **3 s** for a direct tile, **6 s** for a two-tap tile (CLOSURE,
-RESUPPLY): those commit only after their picker and take longer to re-open and
+The window is **3 s** for a direct tile, **6 s** for a two-tap tile (DANGER,
+SCENERY, CLOSURE, RESUPPLY): those commit only after their picker and take longer to re-open and
 re-pick for an undo, so they get double the time. `undoMsFor()` on the device and
 `undoWindowFor()` in the parser must stay in step.
 
@@ -229,12 +235,17 @@ is the reference implementation — port it wherever the FIT is ingested.
 
 The on-bike / in-app counters are a **display mirror** of the undo rule above —
 they do not change the FIT. Every Scout port must show them the same way
-([SPEC §6.7](SPEC.md#67-per-tile-tallies)):
+([SPEC §6.9](SPEC.md#69-per-tile-tallies)):
 
 - **Main grid:** per-`poi_type` counts; RESUPPLY folder = sum of WATER+FOOD+MECHANICAL;
-  CLOSURE = sum of all duration commits; SURFACE = stretch starts only.
+  DANGER = sum of all hazard commits; CLOSURE = sum of all duration commits;
+  SCENERY = sum of all kind commits; SURFACE = stretch starts only.
+- **Notice submenu:** per-`poi_detail` counts (`POTHOLES`…`UNKNOWN`). Same
+  code-overlap caveat — separate danger detail buckets.
 - **Duration submenu:** per-`poi_detail` counts (`TODAY`…`UNKNOWN`). Duration codes
   numerically overlap `poi_type` — keep a **separate** detail bucket array.
+- **Scenery submenu:** per-`poi_detail` counts (`NATURE`…`UNKNOWN`). Same
+  code-overlap caveat — separate scenery detail buckets.
 - **Resupply submenu:** per-leaf `poi_type` counts on WATER / FOOD / REPAIR.
 - **Surface submenu:** per-`poi_detail` counts (`ASPHALT`…`SAND` and `END`). Same
   code-overlap caveat — separate surface detail buckets. Grid SURFACE total still
@@ -242,7 +253,7 @@ they do not change the FIT. Every Scout port must show them the same way
   rise until stop.
 - **Open stretch:** while last surface commit was `ASPHALT`…`SAND`, show that type
   as active until `END` / unspecified / ride stop ([SPEC §7.1](SPEC.md#71-open-stretch-indicator-all-ports)).
-- Undo of a CLOSURE decrements the detail bucket of the **first** tap in the pair.
+- Undo of a DANGER, CLOSURE or SCENERY decrements the detail bucket of the **first** tap in the pair.
 - Reset tallies when the ride stops; do not tally while idle/paused.
 
 It also means the **FIFO queue is load-bearing**. One tap per `compute()` is
@@ -285,7 +296,7 @@ tag / radar not tracking. A handful of seconds from a real ride:
 
     timestamp   lat       lon      poi_type poi_detail  count near speed  meaning
     1000000004  52.0016   4.0024      0        0         255  255  255    untagged second — still written, poi_type 0
-    1000000005  52.0020   4.0030      1        0         255  255  255    DANGER — direct tap, no qualifier
+    1000000005  52.0020   4.0030      1        1         255  255  255    DANGER + detail 1 = POTHOLES
     1000000006  52.0024   4.0036      0        0          1    40   28    no tag; radar picks up a car (1 target, 40 m, +28 kph)
     1000000007  52.0028   4.0042      0        0          1    25   30    same car still tracked → parser counts it
     1000000008  52.0032   4.0048      0        0          0   255  255    count back to 0; near/speed invalid again

@@ -103,12 +103,12 @@ const live = (rows) => mod.applyUndoRule(rows).filter(t => !t.cancelled).map(t =
 check('same type 1s apart -> both cancelled',
       JSON.stringify(live([at(0, 1), at(1, 1)])) === '[]',
       JSON.stringify(live([at(0, 1), at(1, 1)])));
-check('same type 4s apart -> both kept (outside window)',
-      JSON.stringify(live([at(0, 1), at(4, 1)])) === '[1,1]',
-      JSON.stringify(live([at(0, 1), at(4, 1)])));
+check('same type 4s apart -> both kept (outside 3s direct window)',
+      JSON.stringify(live([at(0, 4), at(4, 4)])) === '[4,4]',
+      JSON.stringify(live([at(0, 4), at(4, 4)])));
 check('same type exactly 3s apart -> kept (boundary is exclusive)',
-      JSON.stringify(live([at(0, 1), at(3, 1)])) === '[1,1]',
-      JSON.stringify(live([at(0, 1), at(3, 1)])));
+      JSON.stringify(live([at(0, 4), at(3, 4)])) === '[4,4]',
+      JSON.stringify(live([at(0, 4), at(3, 4)])));
 check('different types 1s apart -> both kept (burst tagging)',
       JSON.stringify(live([at(0, 1), at(1, 6)])) === '[1,6]',
       JSON.stringify(live([at(0, 1), at(1, 6)])));
@@ -134,12 +134,18 @@ check('CLOSURE pair cancels regardless of differing detail', (() => {
 check('CLOSURE pair 5s apart -> cancelled (subitem window)',
       JSON.stringify(live([at(0, 5), at(5, 5)])) === '[]',
       JSON.stringify(live([at(0, 5), at(5, 5)])));
+check('NOTICE pair 5s apart -> cancelled (subitem window)',
+      JSON.stringify(live([at(0, 1), at(5, 1)])) === '[]',
+      JSON.stringify(live([at(0, 1), at(5, 1)])));
+check('SCENERY pair 5s apart -> cancelled (subitem window)',
+      JSON.stringify(live([at(0, 2), at(5, 2)])) === '[]',
+      JSON.stringify(live([at(0, 2), at(5, 2)])));
 check('RESUPPLY leaf (WATER) pair 5s apart -> cancelled (subitem window)',
       JSON.stringify(live([at(0, 3), at(5, 3)])) === '[]',
       JSON.stringify(live([at(0, 3), at(5, 3)])));
-check('DANGER (direct tile) pair 4s apart -> kept (still just 3s)',
-      JSON.stringify(live([at(0, 1), at(4, 1)])) === '[1,1]',
-      JSON.stringify(live([at(0, 1), at(4, 1)])));
+check('OTHER (direct tile) pair 4s apart -> kept (still just 3s)',
+      JSON.stringify(live([at(0, 4), at(4, 4)])) === '[4,4]',
+      JSON.stringify(live([at(0, 4), at(4, 4)])));
 // SURFACE is exempt from undo entirely — surface tags are segment transitions,
 // so two in a row must NOT cancel, at any spacing.
 check('SURFACE tags never cancel (transitions), 1s apart -> both kept',

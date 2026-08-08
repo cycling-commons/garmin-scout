@@ -78,8 +78,10 @@ class RideRecoveryStore(context: Context) {
             })
             val tallies = session.tallies
             root.put("counts", JSONArray(tallies.counts.toList()))
+            root.put("dangerDetails", JSONArray(tallies.dangerDetails.toList()))
             root.put("closureDetails", JSONArray(tallies.closureDetails.toList()))
             root.put("surfaceDetails", JSONArray(tallies.surfaceDetails.toList()))
+            root.put("sceneryDetails", JSONArray(tallies.sceneryDetails.toList()))
             root.put("lastTapType", tallies.lastTapType)
             root.put("lastTapDetail", tallies.lastTapDetail)
             root.put("lastTapAtMs", tallies.lastTapAtMs)
@@ -101,8 +103,20 @@ class RideRecoveryStore(context: Context) {
                 }
                 val tallies = TagTalliesSnapshot(
                     counts = root.getJSONArray("counts").toIntArray(),
+                    dangerDetails =
+                        if (root.has("dangerDetails")) {
+                            root.getJSONArray("dangerDetails").toIntArray()
+                        } else {
+                            IntArray(6)
+                        },
                     closureDetails = root.getJSONArray("closureDetails").toIntArray(),
                     surfaceDetails = root.getJSONArray("surfaceDetails").toIntArray(),
+                    sceneryDetails =
+                        if (root.has("sceneryDetails")) {
+                            root.getJSONArray("sceneryDetails").toIntArray()
+                        } else {
+                            IntArray(7)
+                        },
                     lastTapType = root.getInt("lastTapType"),
                     lastTapDetail = root.getInt("lastTapDetail"),
                     lastTapAtMs = root.getLong("lastTapAtMs"),

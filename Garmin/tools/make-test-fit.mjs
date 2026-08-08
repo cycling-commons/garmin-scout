@@ -47,8 +47,8 @@ export const SCENARIO = (() => {
   const tag = (i, type, detail) => { rec[i].type = type; rec[i].detail = detail; };
   const radar = (i, c, near, sp) => { rec[i].count = c; rec[i].near = near; rec[i].rspeed = sp; };
 
-  tag(5, 1, 0);                        // DANGER
-  tag(10, 2, 0);                       // SCENERY
+  tag(5, 1, 1);                        // DANGER / POTHOLES
+  tag(10, 2, 4);                       // SCENERY / VIEW
   tag(13, 3, 0);                       // WATER  (resupply leaf)
   tag(15, 7, 0);                       // FOOD
   tag(17, 8, 0);                       // MECHANICAL

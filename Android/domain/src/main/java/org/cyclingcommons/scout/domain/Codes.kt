@@ -17,6 +17,16 @@ object PoiType {
     const val UI_BACK = 255
 }
 
+/** Hazard kind when poi_type == DANGER */
+object Danger {
+    const val NONE = 0
+    const val POTHOLES = 1
+    const val CROSSING = 2
+    const val CORNER = 3
+    const val OTHER = 4
+    const val UNKNOWN = 5
+}
+
 /** Closure duration when poi_type == CLOSURE */
 object Duration {
     const val NONE = 0
@@ -41,6 +51,17 @@ object Surface {
     const val END = 9
 }
 
+/** Scenery kind when poi_type == SCENERY */
+object Scenery {
+    const val NONE = 0
+    const val NATURE = 1
+    const val HISTORY = 2
+    const val CULTURE = 3
+    const val VIEW = 4
+    const val ARCH = 5
+    const val UNKNOWN = 6
+}
+
 /** uint8 FIT invalid — radar not tracking */
 const val RADAR_NA = 255
 
@@ -56,7 +77,8 @@ object Timings {
 
 fun undoMsFor(type: Int): Long =
     when (type) {
-        PoiType.WATER, PoiType.CLOSURE, PoiType.FOOD, PoiType.MECHANICAL -> Timings.UNDO_MS * 2
+        PoiType.DANGER, PoiType.WATER, PoiType.CLOSURE, PoiType.SCENERY, PoiType.FOOD,
+        PoiType.MECHANICAL -> Timings.UNDO_MS * 2
         else -> Timings.UNDO_MS
     }
 

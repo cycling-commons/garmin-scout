@@ -11,18 +11,26 @@ class TagTalliesTest {
     @Test
     fun directUndoWithinWindow() {
         val t = TagTallies()
-        assertFalse(t.countTap(PoiType.DANGER, 0, 1000))
-        assertEquals(1, t.tileCount(PoiType.DANGER))
-        assertTrue(t.countTap(PoiType.DANGER, 0, 2000))
-        assertEquals(0, t.tileCount(PoiType.DANGER))
+        assertFalse(t.countTap(PoiType.OTHER, 0, 1000))
+        assertEquals(1, t.tileCount(PoiType.OTHER))
+        assertTrue(t.countTap(PoiType.OTHER, 0, 2000))
+        assertEquals(0, t.tileCount(PoiType.OTHER))
     }
 
     @Test
     fun directKeptOutsideWindow() {
         val t = TagTallies()
-        t.countTap(PoiType.DANGER, 0, 1000)
-        assertFalse(t.countTap(PoiType.DANGER, 0, 1000 + Timings.UNDO_MS))
-        assertEquals(2, t.tileCount(PoiType.DANGER))
+        t.countTap(PoiType.OTHER, 0, 1000)
+        assertFalse(t.countTap(PoiType.OTHER, 0, 1000 + Timings.UNDO_MS))
+        assertEquals(2, t.tileCount(PoiType.OTHER))
+    }
+
+    @Test
+    fun dangerGetsDoubleWindow() {
+        val t = TagTallies()
+        t.countTap(PoiType.DANGER, Danger.POTHOLES, 1000)
+        assertTrue(t.countTap(PoiType.DANGER, Danger.CORNER, 1000 + Timings.UNDO_MS + 500))
+        assertEquals(0, t.tileCount(PoiType.DANGER))
     }
 
     @Test
@@ -31,6 +39,14 @@ class TagTalliesTest {
         t.countTap(PoiType.CLOSURE, Duration.TODAY, 1000)
         assertTrue(t.countTap(PoiType.CLOSURE, Duration.DAYS, 1000 + Timings.UNDO_MS + 500))
         assertEquals(0, t.tileCount(PoiType.CLOSURE))
+    }
+
+    @Test
+    fun sceneryGetsDoubleWindow() {
+        val t = TagTallies()
+        t.countTap(PoiType.SCENERY, Scenery.VIEW, 1000)
+        assertTrue(t.countTap(PoiType.SCENERY, Scenery.NATURE, 1000 + Timings.UNDO_MS + 500))
+        assertEquals(0, t.tileCount(PoiType.SCENERY))
     }
 
     @Test
@@ -79,6 +95,18 @@ class TagTalliesTest {
     }
 
     @Test
+    fun sceneryDetailTalliesKeptSeparately() {
+        val t = TagTallies()
+        val gap = Timings.UNDO_MS * 2 + 1
+        t.countTap(PoiType.SCENERY, Scenery.VIEW, 1000)
+        t.countTap(PoiType.SCENERY, Scenery.VIEW, 1000 + gap)
+        t.countTap(PoiType.SCENERY, Scenery.NATURE, 1000 + gap * 2)
+        assertEquals(2, t.sceneryDetailCount(Scenery.VIEW))
+        assertEquals(1, t.sceneryDetailCount(Scenery.NATURE))
+        assertEquals(3, t.tileCount(PoiType.SCENERY))
+    }
+
+    @Test
     fun surfaceDetailTalliesIncludeEnd() {
         val t = TagTallies()
         t.countTap(PoiType.SURFACE, Surface.COBBLES, 1000)
@@ -105,14 +133,29 @@ class TagTalliesTest {
 
 class ScoutControllerTest {
     @Test
-    fun directTagEnqueuesWhenRunning() {
+    fun noticePickerCommitsAfterCorrectWindow() {
         val c = ScoutController()
         c.start()
-        c.onTileTap(0, 1000) // DANGER
-        assertEquals(1, c.queueSize())
+        c.onTileTap(3, 1000) // NOTICE
+        assertEquals(UiMode.NOTICE, c.snapshot().mode)
+        c.onTileTap(0, 1100) // POTHOLES
+        assertEquals(0, c.queueSize())
+        c.onTick(1100 + Timings.CORRECT_MS + 1)
         val tag = c.drainTag()
         assertEquals(PoiType.DANGER, tag!!.type)
-        assertEquals(0, tag.detail)
+        assertEquals(Danger.POTHOLES, tag.detail)
+        assertEquals(UiMode.GRID, c.snapshot().mode)
+    }
+
+    @Test
+    fun noticeTimeoutWritesUnknown() {
+        val c = ScoutController()
+        c.start()
+        c.onTileTap(3, 1000)
+        c.onTick(1000 + Timings.PICK_MS + 1)
+        val tag = c.drainTag()
+        assertEquals(PoiType.DANGER, tag!!.type)
+        assertEquals(Danger.UNKNOWN, tag.detail)
     }
 
     @Test
@@ -128,9 +171,9 @@ class ScoutControllerTest {
     @Test
     fun idleTapDoesNotTallyOrEnqueue() {
         val c = ScoutController()
-        c.onTileTap(0, 1000) // DANGER while idle
+        c.onTileTap(3, 1000) // NOTICE while idle
         assertEquals(0, c.queueSize())
-        assertEquals(0, c.snapshot().tileCounts[0])
+        assertEquals(0, c.snapshot().tileCounts[3])
         assertNull(c.takeFeedback())
         assertEquals(UiMode.GRID, c.snapshot().mode)
     }
@@ -169,10 +212,36 @@ class ScoutControllerTest {
     }
 
     @Test
+    fun sceneryPickerCommitsAfterCorrectWindow() {
+        val c = ScoutController()
+        c.start()
+        c.onTileTap(4, 1000) // SCENERY
+        assertEquals(UiMode.SCENERY, c.snapshot().mode)
+        c.onTileTap(0, 1100) // NATURE
+        assertEquals(0, c.queueSize())
+        c.onTick(1100 + Timings.CORRECT_MS + 1)
+        val tag = c.drainTag()
+        assertEquals(PoiType.SCENERY, tag!!.type)
+        assertEquals(Scenery.NATURE, tag.detail)
+        assertEquals(UiMode.GRID, c.snapshot().mode)
+    }
+
+    @Test
+    fun sceneryTimeoutWritesUnknown() {
+        val c = ScoutController()
+        c.start()
+        c.onTileTap(4, 1000)
+        c.onTick(1000 + Timings.PICK_MS + 1)
+        val tag = c.drainTag()
+        assertEquals(PoiType.SCENERY, tag!!.type)
+        assertEquals(Scenery.UNKNOWN, tag.detail)
+    }
+
+    @Test
     fun resupplyTimeoutDrops() {
         val c = ScoutController()
         c.start()
-        c.onTileTap(3, 1000) // RESUPPLY
+        c.onTileTap(0, 1000) // RESUPPLY
         c.onTick(1000 + Timings.PICK_MS + 1)
         assertEquals(0, c.queueSize())
         assertEquals(UiMode.GRID, c.snapshot().mode)
@@ -193,11 +262,11 @@ class ScoutControllerTest {
     fun fifoPreservesDoubleTap() {
         val c = ScoutController()
         c.start()
-        c.onTileTap(0, 1000)
-        c.onTileTap(0, 1500)
+        c.onTileTap(5, 1000) // OTHER
+        c.onTileTap(5, 1500) // OTHER
         assertEquals(2, c.queueSize())
-        assertEquals(PoiType.DANGER, c.drainTag()!!.type)
-        assertEquals(PoiType.DANGER, c.drainTag()!!.type)
+        assertEquals(PoiType.OTHER, c.drainTag()!!.type)
+        assertEquals(PoiType.OTHER, c.drainTag()!!.type)
     }
 
     @Test
@@ -220,7 +289,9 @@ class ScoutControllerTest {
     fun sessionSnapshotRoundTrip() {
         val c = ScoutController()
         c.start()
-        c.onTileTap(0, 1000)
+        c.onTileTap(3, 1000) // NOTICE
+        c.onTileTap(0, 1100) // POTHOLES
+        c.onTick(1100 + Timings.CORRECT_MS + 1)
         c.drainTag()
         val snap = c.sessionSnapshot(
             elapsedMs = 42_000L,

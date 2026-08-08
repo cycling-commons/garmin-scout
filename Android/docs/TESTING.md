@@ -110,8 +110,8 @@ testing BLE radar).
 | 1b | Idle → tap any tile | Banner above controls: “Start your ride…” with **Start ride** action; no flash/picker |
 | 1c | Paused → tap any tile | “Resume your ride…” with **Resume** action |
 | 2 | Wait ~10 s outdoors / with fake GPS | Status shows `GPS · ±N m` (not stuck on `Waiting for GPS` forever outdoors) |
-| 3 | Tap BEWARE, SCENERY, OTHER | Flash + tallies increment |
-| 4 | Tap BEWARE twice quickly | Tally undoes (SPEC undo) |
+| 3 | Tap OTHER; NOTICE → pick POTHOLES; SCENERY → pick VIEW | Flash + tallies increment; pickers open |
+| 4 | Tap NOTICE twice quickly (after two commits) | Tally undoes (SPEC undo) |
 | 5 | CLOSURE → pick TODAY → wait 3 s | Beep/haptic; grid CLOSURE tally up; reopen picker → TODAY shows `1` |
 | 5b | CLOSURE → MONTHS (later, outside undo) → reopen | MONTHS shows its own count; CLOSURE total = sum of durations |
 | 6 | SURFACE → COBBLES → later END | Banner `surface open: COBBLES`; SURFACE tile lit with type; clears on END |

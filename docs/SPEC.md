@@ -167,8 +167,8 @@ writing original FIT when feasible so existing ingest tools keep working.
 | Code | Name | UI label | Grid behaviour |
 | --- | --- | --- | --- |
 | 0 | NONE | — | — |
-| 1 | DANGER | NOTICE¹ | Direct tag |
-| 2 | SCENERY | SCENERY | Direct tag |
+| 1 | DANGER | NOTICE¹ | Opens notice picker |
+| 2 | SCENERY | SCENERY | Opens scenery picker |
 | 3 | WATER | WATER | Resupply leaf |
 | 4 | OTHER | OTHER | Direct tag |
 | 5 | CLOSURE | CLOSURE | Opens duration picker |
@@ -178,10 +178,21 @@ writing original FIT when feasible so existing ingest tools keep working.
 
 UI-only codes (never written): `254` = RESUPPLY folder, `255` = BACK.
 
-¹ Connect IQ tile label is **NOTICE**. FIT `poi_type` name stays `DANGER`
-  (code 1). Android currently still shows **BEWARE**.
+¹ Connect IQ and Android both label type 1 **NOTICE**. FIT `poi_type` name stays `DANGER`
+  (code 1).
 
-### 5.2 Closure duration (`poi_type == 5`) → `poi_detail`
+### 5.2 Hazard kind (`poi_type == 1`) → `poi_detail`
+
+| Code | Label |
+| --- | --- |
+| 0 | NONE / legacy (pre-picker rides) |
+| 1 | POTHOLES |
+| 2 | CROSSING |
+| 3 | CORNER |
+| 4 | OTHER (hazard; not `poi_type` OTHER) |
+| 5 | UNKNOWN |
+
+### 5.3 Closure duration (`poi_type == 5`) → `poi_detail`
 
 | Code | Label |
 | --- | --- |
@@ -195,7 +206,7 @@ UI-only codes (never written): `254` = RESUPPLY folder, `255` = BACK.
 Exact end dates are **not** entered on the bike; coarse duration + sample
 timestamp hydrates a real range later in a web UI.
 
-### 5.3 Surface type (`poi_type == 6`) → `poi_detail`
+### 5.4 Surface type (`poi_type == 6`) → `poi_detail`
 
 Aligned to OSM `surface=` values, smooth → rough:
 
@@ -214,7 +225,19 @@ Aligned to OSM `surface=` values, smooth → rough:
 
 Surface is a **segment channel**, not a point channel (see §7).
 
-### 5.4 Resupply encoding
+### 5.5 Scenery kind (`poi_type == 2`) → `poi_detail`
+
+| Code | Label |
+| --- | --- |
+| 0 | NONE / legacy (pre-picker rides) |
+| 1 | NATURE |
+| 2 | HISTORY |
+| 3 | CULTURE |
+| 4 | VIEW |
+| 5 | ARCH (architecture) |
+| 6 | UNKNOWN |
+
+### 5.6 Resupply encoding
 
 RESUPPLY is a **menu folder**, not a written code. Leaves are distinct
 `poi_type`s with `poi_detail = 0`:
@@ -237,21 +260,19 @@ resolve to the tile above (not a dead zone).
 
 ```
 ┌───────────┬───────────┐
-│  NOTICE  │  CLOSURE  │
+│ RESUPPLY │  CLOSURE  │
 ├───────────┼───────────┤
-│ SURFACE  │ RESUPPLY  │
+│ SURFACE  │  NOTICE   │
 ├───────────┼───────────┤
 │  SCENERY │  OTHER    │
 └───────────┴───────────┘
 ```
 
-Connect IQ labels above. Android still uses **BEWARE** for type 1.
-
 Tile colours (RGB, for visual parity):
 
 | Tile | Colour |
 | --- | --- |
-| NOTICE (Garmin) / BEWARE (Android) | `#D1421F` |
+| NOTICE | `#D1421F` |
 | CLOSURE | `#8E44AD` |
 | SURFACE | `#8E5A2B` |
 | RESUPPLY | `#1E7FC0` |
@@ -259,7 +280,7 @@ Tile colours (RGB, for visual parity):
 | OTHER | `#B58900` |
 | BACK (pickers) | `#444444` |
 
-### 6.2 Direct tags (NOTICE, SCENERY, OTHER)
+### 6.2 Direct tags (OTHER)
 
 1. Tap → enqueue `(type, detail=0)`, update tallies, haptic/tone confirm.
 2. Tile stays lit for the **undo window** (3 s) as a “tap again to cancel” cue.
@@ -268,7 +289,7 @@ Tile colours (RGB, for visual parity):
    decrements (parser will cancel the pair). Distinct undo feedback (double
    pulse / reset tone).
 
-### 6.3 Two-tap flows (CLOSURE, SURFACE, RESUPPLY)
+### 6.3 Two-tap flows (NOTICE, CLOSURE, SCENERY, SURFACE, RESUPPLY)
 
 Opening a picker does **not** write a tag yet.
 
@@ -290,26 +311,37 @@ seconds inside the lit subitem tile.
 
 | Mode | On timeout |
 | --- | --- |
+| NOTICE | Commit `DANGER` + `UNKNOWN` |
 | CLOSURE | Commit `CLOSURE` + `UNKNOWN` |
+| SCENERY | Commit `SCENERY` + `UNKNOWN` |
 | SURFACE | Commit `SURFACE` + `NONE` (unspecified point) |
 | RESUPPLY | Drop; return to grid with no tag |
 
-Picker titles: CLOSURE → `CLOSED FOR?`; RESUPPLY → `WHAT KIND?`; SURFACE needs
+Picker titles: NOTICE → `NOTICE?`; CLOSURE →
+`CLOSED FOR?`; SCENERY → `SCENERY?`; RESUPPLY → `WHAT KIND?`; SURFACE needs
 no header (tiles name themselves).
 
-### 6.4 Duration picker
+### 6.4 Notice picker
+
+`POTHOLES · CROSSING · CORNER · OTHER · BACK`
+
+### 6.5 Duration picker
 
 `TODAY · DAYS · WEEKS · MONTHS · UNKNOWN · BACK`
 
-### 6.5 Resupply picker
+### 6.6 Scenery picker
+
+`NATURE · HISTORY · CULTURE · VIEW · ARCH · UNKNOWN · BACK`
+
+### 6.7 Resupply picker
 
 `WATER · FOOD · REPAIR · BACK`
 
-### 6.6 Surface picker (5×2)
+### 6.8 Surface picker (5×2)
 
 `ASPHALT · CONCRETE · PAVING · SETT · COBBLES · GRAVEL · DIRT · SAND · END · BACK`
 
-### 6.7 Per-tile tallies
+### 6.9 Per-tile tallies
 
 **Normative for every port** (Garmin, Android, Karoo, iOS, …). Live tallies are
 display-only mirrors of the parser undo rule — they never change what is written
@@ -322,6 +354,8 @@ to the file. See also [DATA-FORMAT.md](DATA-FORMAT.md) (Undo).
   display; both taps still go to the file.
 - RESUPPLY folder tile shows the **sum** of WATER + FOOD + MECHANICAL.
 - CLOSURE tile shows the **sum** of all committed closure durations.
+- NOTICE tile shows the **sum** of all committed hazard kinds.
+- SCENERY tile shows the **sum** of all committed scenery kinds.
 - SURFACE tally counts only stretch **starts** (detail in `ASPHALT..SAND`), not
   END.
 
@@ -329,30 +363,32 @@ to the file. See also [DATA-FORMAT.md](DATA-FORMAT.md) (Undo).
 
 | Picker | What each leaf shows |
 | --- | --- |
+| Notice (`NOTICE?`) | Per-**detail** count: how many times that kind (`POTHOLES` … `UNKNOWN`) was committed this ride. BACK never tallies. |
 | Duration (`CLOSED FOR?`) | Per-**detail** count: how many times that duration (`TODAY` … `UNKNOWN`) was committed this ride. BACK never tallies. |
+| Scenery (`SCENERY?`) | Per-**detail** count: how many times that kind (`NATURE` … `UNKNOWN`) was committed this ride. BACK never tallies. |
 | Resupply (`WHAT KIND?`) | Per-leaf `poi_type` count (WATER / FOOD / MECHANICAL). BACK never tallies. |
 | Surface | Per-**detail** count: how many times that surface leaf (`ASPHALT` … `SAND`, and `END`) was committed this ride. BACK never tallies. (Grid SURFACE total still counts **starts only**, not END.) |
 
-Closure and surface detail buckets are independent of `poi_type` indices
-(duration / surface codes overlap numeric `poi_type` values — implementations
+Closure, notice, scenery, and surface detail buckets are independent of `poi_type` indices
+(duration / hazard / scenery / surface codes overlap numeric `poi_type` values — implementations
 **must not** index the `poi_type` count array by those detail codes to paint
-picker leaves). On undo of a CLOSURE, decrement both the grid CLOSURE total and
-the **detail bucket of the first tap** in the undone pair (not necessarily the
+picker leaves). On undo of a CLOSURE, NOTICE, or SCENERY, decrement both the grid total
+and the **detail bucket of the first tap** in the undone pair (not necessarily the
 second tap’s detail). SURFACE has no double-tap undo, so surface leaf counts
 only ever increase until the ride stops.
 
 Tallies reset when the ride stops (timer → idle). Idle/paused taps must not
 change tallies.
 
-### 6.8 Undo windows (must match parser)
+### 6.10 Undo windows (must match parser)
 
 | Tag class | Window |
 | --- | --- |
-| Direct (NOTICE / BEWARE, SCENERY, OTHER) | 3 s |
-| Two-tap leaves (CLOSURE, WATER, FOOD, MECHANICAL) | 6 s |
+| Direct (OTHER) | 3 s |
+| Two-tap leaves (NOTICE, SCENERY, CLOSURE, WATER, FOOD, MECHANICAL) | 6 s |
 | SURFACE | **Exempt** — second surface tag is a transition, never an undo |
 
-### 6.9 Confirmation feedback
+### 6.11 Confirmation feedback
 
 Eyes-on-road: short vibration if available and enabled; else tone if available
 and enabled. Undo uses a distinct pattern. Failure to buzz/beep must not block
@@ -563,7 +599,7 @@ build-time env template (Android: `.env.example` → `.env.dev.local`); see
 - [ ] Stable `poi_type` / `poi_detail` codes (§5).
 - [ ] Surface as transitions + END; no surface double-tap undo.
 - [ ] Double-tap undo semantics for point types; live tallies match parser
-      (main grid **and** duration / resupply / surface submenu leaves — §6.7).
+      (main grid **and** notice / duration / scenery / resupply / surface submenu leaves — §6.9).
 - [ ] Open surface-stretch indicator while a type is active (§7.1).
 - [ ] Haptic or tone confirmation; distinct undo feedback when possible.
 - [ ] Recording indicator.

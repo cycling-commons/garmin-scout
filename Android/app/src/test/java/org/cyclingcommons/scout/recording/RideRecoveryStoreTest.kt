@@ -41,8 +41,10 @@ class RideRecoveryStoreTest {
                 queuedTags = emptyList(),
                 tallies = TagTalliesSnapshot(
                     counts = IntArray(9),
+                    dangerDetails = IntArray(6),
                     closureDetails = IntArray(6),
                     surfaceDetails = IntArray(10),
+                    sceneryDetails = IntArray(7),
                     lastTapType = 0,
                     lastTapDetail = 0,
                     lastTapAtMs = 0,

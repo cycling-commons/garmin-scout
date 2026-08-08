@@ -10,19 +10,29 @@ data class Tile(
 
 enum class UiMode {
     GRID,
+    NOTICE,
     DURATION,
     RESUPPLY,
     SURFACE,
+    SCENERY,
 }
 
 object Tiles {
     val grid: List<Tile> = listOf(
-        Tile(PoiType.DANGER, "BEWARE", 0xD1421F),
+        Tile(PoiType.UI_RESUPPLY, "RESUPPLY", 0x1E7FC0),
         Tile(PoiType.CLOSURE, "CLOSURE", 0x8E44AD),
         Tile(PoiType.SURFACE, "SURFACE", 0x8E5A2B),
-        Tile(PoiType.UI_RESUPPLY, "RESUPPLY", 0x1E7FC0),
+        Tile(PoiType.DANGER, "NOTICE", 0xD1421F),
         Tile(PoiType.SCENERY, "SCENERY", 0x2E8B57),
         Tile(PoiType.OTHER, "OTHER", 0xB58900),
+    )
+
+    val notice: List<Tile> = listOf(
+        Tile(Danger.POTHOLES, "POTHOLES", 0xD1421F),
+        Tile(Danger.CROSSING, "CROSSING", 0xE67E22),
+        Tile(Danger.CORNER, "CORNER", 0xB58900),
+        Tile(Danger.OTHER, "OTHER", 0x8E44AD),
+        Tile(PoiType.UI_BACK, "BACK", 0x444444),
     )
 
     val duration: List<Tile> = listOf(
@@ -54,18 +64,32 @@ object Tiles {
         Tile(PoiType.UI_BACK, "BACK", 0x444444),
     )
 
+    val scenery: List<Tile> = listOf(
+        Tile(Scenery.NATURE, "NATURE", 0x2E8B57),
+        Tile(Scenery.HISTORY, "HISTORY", 0x8E44AD),
+        Tile(Scenery.CULTURE, "CULTURE", 0xE67E22),
+        Tile(Scenery.VIEW, "VIEW", 0x1E7FC0),
+        Tile(Scenery.ARCH, "ARCH", 0xB58900),
+        Tile(Scenery.UNKNOWN, "UNKNOWN", 0x777777),
+        Tile(PoiType.UI_BACK, "BACK", 0x444444),
+    )
+
     fun forMode(mode: UiMode): List<Tile> =
         when (mode) {
             UiMode.GRID -> grid
+            UiMode.NOTICE -> notice
             UiMode.DURATION -> duration
             UiMode.RESUPPLY -> resupply
             UiMode.SURFACE -> surface
+            UiMode.SCENERY -> scenery
         }
 
     fun titleFor(mode: UiMode): String? =
         when (mode) {
+            UiMode.NOTICE -> "NOTICE?"
             UiMode.DURATION -> "CLOSED FOR?"
             UiMode.RESUPPLY -> "WHAT KIND?"
+            UiMode.SCENERY -> "SCENERY?"
             else -> null
         }
 
